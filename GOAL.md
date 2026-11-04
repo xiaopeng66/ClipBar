@@ -253,6 +253,14 @@
 - [x] 死代码清理：两个未绑定命令与 closeRequested 管线、扩展动作死成员、孤儿转换器、7 个幽灵命名
 - [x] 新增跨年日期测试；**386 例全绿**（App 204 + Core 182）；编码检查 OK；双版本发布并实测验收
 
+### GitHub 发布 v1.0.0（2026-11-04）
+
+- [x] 仓库：https://github.com/xiaopeng66/ClipBar （public，MIT License，main 分支）
+- [x] Release：https://github.com/xiaopeng66/ClipBar/releases/tag/v1.0.0
+      资产 ClipBar.exe 70.4 MB（自包含，含 P-0 修复）+ ClipBar-lite.exe 9.2 MB（框架依赖）
+- [x] 隐私扫描（无人名/无路径泄露）后 git init 提交 105 文件；.gitignore 排除 bin/obj/dist/数据文件
+- [x] 后续计划：`docs/ROADMAP.md`（v1.1 快赢包 → v1.2 体验项 → v1.3 扩展性地基 → backlog）
+
 ### 第十一轮：产品更名 Clipboard11 → ClipBar（2026-11-04）
 
 - [x] 命名：Clipboard + Bar，与 PulseBar/TrafficMonitor 托盘工具命名一致；联网核查无同名在役产品
