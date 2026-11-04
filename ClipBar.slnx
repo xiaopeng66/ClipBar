@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClipBar.App/ClipBar.App.csproj" />
+    <Project Path="src/ClipBar.Core/ClipBar.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClipBar.App.Tests/ClipBar.App.Tests.csproj" />
+    <Project Path="tests/ClipBar.Core.Tests/ClipBar.Core.Tests.csproj" />
+  </Folder>
+</Solution>

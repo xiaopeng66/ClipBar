@@ -1,0 +1,661 @@
+﻿<ui:FluentWindow x:Class="ClipBar.App.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="ClipBar"
+                 Width="420"
+                 Height="620"
+                 MinWidth="360"
+                 MinHeight="480"
+                 WindowStartupLocation="CenterScreen"
+                 WindowStyle="None"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 Topmost="True"
+                 Background="Transparent"
+                 AllowsTransparency="False"
+                 WindowBackdropType="Acrylic"
+                 WindowCornerPreference="Round"
+                 ExtendsContentIntoTitleBar="True"
+                 FontFamily="Segoe UI Variable Text, Segoe UI"
+                 FontSize="13"
+                 TextOptions.TextFormattingMode="Ideal"
+                 TextOptions.TextRenderingMode="ClearType"
+                 UseLayoutRounding="True"
+                 SnapsToDevicePixels="True"
+                 Activated="Window_Activated"
+                 Deactivated="Window_Deactivated"
+                 PreviewKeyDown="Window_PreviewKeyDown">
+
+    <ui:FluentWindow.Resources>
+        <!-- The stock ListBox template floats its scrollbar over the item area: the thumb
+             drew on top of the card's right edge, and because the cards ran to the list's
+             right edge while being inset on the left, the left margin looked wider than the
+             right one. This list is templated instead: the scrollbar occupies its own gutter
+             on the right, outside the card column, and the cards are inset by the same 12 DIP
+             on both sides. -->
+        <Style x:Key="GutterScrollBar" TargetType="ScrollBar">
+            <!-- Width alone is not enough: the themed ScrollBar carries a MinWidth that wins
+                 over the setter, which left the thumb 14 DIP wide and overlapping the card.
+                 The bar gets the full 12 DIP gutter as its hit area (comfortable to drag),
+                 while the thumb itself is drawn 6 DIP wide and centred inside it, so the
+                 visible indicator stays slim and clear of the cards. -->
+            <Setter Property="Width" Value="12" />
+            <Setter Property="MinWidth" Value="12" />
+            <Setter Property="MaxWidth" Value="12" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <!-- Transparent root so the whole 12 DIP bar is
+                                                     draggable; the visible pill is only 6 DIP. -->
+                                                <Grid Background="Transparent">
+                                                    <Border x:Name="ThumbBody"
+                                                            Margin="3,0"
+                                                            CornerRadius="3"
+                                                            Background="{DynamicResource TextFillColorSecondaryBrush}"
+                                                            Opacity="0.45" />
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="ThumbBody"
+                                                                Property="Opacity" Value="0.75" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand"
+                                                  Opacity="0" Focusable="False" IsTabStop="False" />
+                                </Track.IncreaseRepeatButton>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand"
+                                                  Opacity="0" Focusable="False" IsTabStop="False" />
+                                </Track.DecreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid Background="{TemplateBinding Background}">
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                    Margin="{TemplateBinding Padding}"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                    Content="{TemplateBinding Content}"
+                                                    ContentTemplate="{TemplateBinding ContentTemplate}" />
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Style="{StaticResource GutterScrollBar}"
+                                       Orientation="Vertical"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,6,0,6"
+                                       Minimum="0"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryListStyle" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <!-- Explicit panel: the inherited one carried a left inset, which left the item
+                 containers flush with the list's right edge and 5 DIP short on the left. -->
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ScrollViewer Style="{StaticResource HistoryScrollViewer}"
+                                          Focusable="False"
+                                          CanContentScroll="True"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The themed GroupItem carried a left inset, which made the item containers sit
+             5 DIP short of the list's left edge while staying flush on the right — the
+             "left margin wider than right" the cards showed. A bare header + presenter has
+             no inset of its own, so the containers fill the list symmetrically. -->
+        <Style x:Key="HistoryGroupStyle" TargetType="GroupItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupItem">
+                        <StackPanel>
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}" />
+                            <ItemsPresenter />
+                        </StackPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ClipItemContainerStyle" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <!-- 12 DIP on both sides: the scrollbar is an overlay in the far
+                                 right gutter, so the card edge can sit the same distance from
+                                 the panel edge as it does on the left. -->
+                            <Border x:Name="Card"
+                                    Margin="12,2"
+                                    Padding="8"
+                                    CornerRadius="8"
+                                    Background="Transparent">
+                                <ContentPresenter />
+                            </Border>
+
+                            <!-- Hairline between neighbouring clips. It is inset to the text edge
+                                 (12 card margin + 8 card padding) so it reads as a divider inside
+                                 the list rather than a border of the card. Full opacity: the
+                                 divider brush is already translucent, and at 0.7 on top of it
+                                 the line was invisible on the acrylic panel. -->
+                            <Border x:Name="Separator"
+                                    Height="1"
+                                    Margin="20,0,20,0"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Card" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                <!-- The divider under a selected card would cut across the
+                                     highlight; hide it while the row is selected. -->
+                                <Setter TargetName="Separator" Property="Opacity" Value="0" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The search field draws its own rounded border; the stock TextBox template would
+             paint a native focus underline inside it, so the template is reduced to the text host. -->
+        <Style x:Key="SearchTextBox" TargetType="TextBox">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Focusable="False"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" CornerRadius="6" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </ui:FluentWindow.Resources>
+
+    <Grid x:Name="RootPanel"
+          PreviewMouseLeftButtonDown="Panel_PreviewMouseLeftButtonDown"
+          Background="Transparent">
+
+        <Border CornerRadius="8"
+                Background="{DynamicResource ApplicationBackgroundBrush}"
+                Opacity="0.88" />
+
+        <Border CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="56" />
+                    <RowDefinition Height="40" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <Grid Grid.Row="0"
+                      Margin="12,8,10,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border
+                            Height="36"
+                            CornerRadius="8"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <Grid>
+                            <ui:SymbolIcon Symbol="Search24"
+                                           FontSize="16"
+                                           Margin="10,0,0,0"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <!-- 34 = icon left margin 10 + icon 16 + gap 8; the same 34 keeps the
+                                 placeholder on the text baseline. -->
+                            <TextBox x:Name="SearchBox"
+                                     Style="{StaticResource SearchTextBox}"
+                                     AutomationProperties.Name="搜索剪贴板"
+                                     Margin="34,0,10,0"
+                                     FontSize="13"
+                                     VerticalContentAlignment="Center"
+                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                     CaretBrush="{DynamicResource TextFillColorPrimaryBrush}"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     TextChanged="SearchBox_TextChanged"
+                                     LostKeyboardFocus="SearchBox_LostKeyboardFocus"
+                                     PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                            <!-- Visibility is driven from code-behind: the IME keeps its composition
+                                 string out of TextBox.Text until it is committed, so a binding to
+                                 SearchText left the hint drawn underneath the composing glyphs. -->
+                            <TextBlock x:Name="SearchPlaceholder"
+                                       Text="搜索剪贴板"
+                                       Margin="34,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       IsHitTestVisible="False" />
+                        </Grid>
+                    </Border>
+
+                    <Button Grid.Column="1"
+                            Style="{StaticResource IconButton}"
+                            Margin="6,0,0,0"
+                            Click="Settings_Click"
+                            ToolTip="设置" AutomationProperties.Name="设置">
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="16"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Button>
+
+                    <Button Grid.Column="2"
+                            Style="{StaticResource IconButton}"
+                            Margin="2,0,0,0"
+                            Click="Close_Click"
+                            ToolTip="关闭" AutomationProperties.Name="关闭">
+                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="16"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Button>
+                </Grid>
+
+                <!-- Filters. Same horizontal inset as the header grid above (12 / 10), so the
+                     first filter's border lines up with the search box's left border. -->
+                <ListBox Grid.Row="1"
+                         Margin="12,0,10,0"
+                         ItemsSource="{Binding Filters}"
+                         SelectedValue="{Binding SelectedFilter, Mode=TwoWay}"
+                         SelectedValuePath="Value"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ItemContainerStyle="{StaticResource FilterItemStyle}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"
+                                        VerticalAlignment="Center" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- History -->
+                <Grid Grid.Row="2">
+                    <ListBox x:Name="HistoryList"
+                             Margin="0,0,0,0"
+                             Style="{StaticResource HistoryListStyle}"
+                             ItemsSource="{Binding ItemsView}"
+                             SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                             ItemContainerStyle="{StaticResource ClipItemContainerStyle}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                             ContextMenuOpening="HistoryList_ContextMenuOpening"
+                             PreviewMouseLeftButtonUp="HistoryList_PreviewMouseLeftButtonUp">
+                        <ListBox.GroupStyle>
+                            <GroupStyle ContainerStyle="{StaticResource HistoryGroupStyle}">
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}"
+                                                   Margin="20,10,0,3"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <!-- The tooltip belongs to the image, not the whole row. It
+                                         never participates in measuring or obscures a short preview. -->
+                                    <Grid MinHeight="30"
+                                          Visibility="{Binding ShowPreview, Converter={StaticResource BoolToVisibility}}">
+                                        <Border x:Name="PreviewFrame"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,2,0,4"
+                                                ClipToBounds="True"
+                                                CornerRadius="8">
+                                            <Image Source="{Binding Thumbnail}"
+                                                   Stretch="Uniform"
+                                                   StretchDirection="DownOnly"
+                                                   SizeChanged="Thumbnail_SizeChanged"
+                                                   ToolTipService.InitialShowDelay="350"
+                                                   ToolTipService.ShowDuration="30000"
+                                                   RenderOptions.BitmapScalingMode="HighQuality">
+                                                <Image.ToolTip>
+                                                    <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                                             Placement="Mouse" MaxWidth="300">
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Title}" FontSize="13"
+                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                            <TextBlock Text="{Binding Subtitle}" Margin="0,3,0,0"
+                                                                       FontSize="11" TextWrapping="Wrap"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                        </StackPanel>
+                                                    </ToolTip>
+                                                </Image.ToolTip>
+                                                <Image.Width>
+                                                    <MultiBinding Converter="{StaticResource ThumbnailSize}" ConverterParameter="Width">
+                                                        <Binding Path="Thumbnail" />
+                                                        <Binding Path="DpiScale" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                        <!-- Card content width, not list width: the card's
+                                                             12 DIP margin plus 8 DIP padding on each side
+                                                             are unavailable, and capping against the list
+                                                             let wide screenshots overflow the card and get
+                                                             clipped at the right edge. -->
+                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ContentPresenter}" />
+                                                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                                        <Binding Path="ImagePreviewMode" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                    </MultiBinding>
+                                                </Image.Width>
+                                                <Image.Height>
+                                                    <MultiBinding Converter="{StaticResource ThumbnailSize}" ConverterParameter="Height">
+                                                        <Binding Path="Thumbnail" />
+                                                        <Binding Path="DpiScale" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ContentPresenter}" />
+                                                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                                        <Binding Path="ImagePreviewMode" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                    </MultiBinding>
+                                                </Image.Height>
+                                            </Image>
+                                        </Border>
+
+                                        <!-- Canvas keeps action buttons out of the preview's measure,
+                                             even when the source is only a few pixels high or wide. -->
+                                        <!-- Anchored to the preview frame, not the row: in Medium
+                                             mode the image is only 160 DIP wide and left-aligned,
+                                             so row-width anchoring left the buttons floating at
+                                             the far edge of an empty row (G-15). -->
+                                        <Canvas x:Name="PreviewActions"
+                                                Width="{Binding ActualWidth, ElementName=PreviewFrame}"
+                                                HorizontalAlignment="Left"
+                                                Opacity="0"
+                                                IsHitTestVisible="False">
+                                            <Border Canvas.Right="0" Canvas.Top="2"
+                                                    Padding="2" CornerRadius="6"
+                                                    Background="{DynamicResource ApplicationBackgroundBrush}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Style="{StaticResource ItemActionButton}"
+                                                            ToolTip="固定" AutomationProperties.Name="固定"
+                                                            Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}">
+                                                        <ui:SymbolIcon Symbol="Pin24"
+                                                                       FontSize="14"
+                                                                       Foreground="{Binding IsPinned, Converter={StaticResource PinBrush}}" />
+                                                    </Button>
+                                                    <Button Style="{StaticResource ItemActionButton}"
+                                                            ToolTip="删除" AutomationProperties.Name="删除"
+                                                            Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}">
+                                                        <ui:SymbolIcon Symbol="Delete24"
+                                                                       FontSize="14"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    </Button>
+                                                </StackPanel>
+                                            </Border>
+                                        </Canvas>
+                                    </Grid>
+
+                                    <!-- Small (and every non-image clip): the icon slot on the left
+                                         with the text row beside it, the original list layout. -->
+                                    <Grid
+                                          Visibility="{Binding ShowTextRow, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border
+                                                    Width="40"
+                                                    Height="40"
+                                                    Margin="0,0,10,0"
+                                                    CornerRadius="8"
+                                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                    VerticalAlignment="Center"
+                                                    ClipToBounds="True"
+                                                    Visibility="{Binding ShowTextRow, Converter={StaticResource BoolToVisibility}}">
+                                                <Grid>
+                                                    <ui:SymbolIcon
+                                                                   Symbol="{Binding IconSymbol}"
+                                                                   FontSize="18"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"
+                                                                   Visibility="{Binding ShowIconSymbol, Converter={StaticResource BoolToVisibility}}" />
+                                                    <Border
+                                                            Width="40" Height="40" CornerRadius="8"
+                                                            RenderOptions.BitmapScalingMode="HighQuality"
+                                                            Visibility="{Binding ShowIconImage, Converter={StaticResource BoolToVisibility}}">
+                                                        <Border.Background>
+                                                            <!-- Top-left aligned: a centered
+                                                             UniformToFill crop of a screenshot
+                                                             showed the uninformative middle
+                                                             sliver (G-16). -->
+                                                            <ImageBrush ImageSource="{Binding Thumbnail}"
+                                                                        Stretch="UniformToFill"
+                                                                        AlignmentX="Left"
+                                                                        AlignmentY="Top" />
+                                                        </Border.Background>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="13"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap" />
+                                                <TextBlock Text="{Binding Subtitle}"
+                                                           Margin="0,2,0,0"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel Grid.Column="1"
+                                                    Orientation="Horizontal"
+                                                    VerticalAlignment="Center">
+                                            <Button Style="{StaticResource ItemActionButton}"
+                                                    ToolTip="固定" AutomationProperties.Name="固定"
+                                                    Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}">
+                                                <ui:SymbolIcon Symbol="Pin24"
+                                                               FontSize="14"
+                                                               Foreground="{Binding IsPinned, Converter={StaticResource PinBrush}}" />
+                                            </Button>
+                                            <Button Style="{StaticResource ItemActionButton}"
+                                                    ToolTip="删除" AutomationProperties.Name="删除"
+                                                    Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}">
+                                                <ui:SymbolIcon Symbol="Delete24"
+                                                               FontSize="14"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
+
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                                 Value="True">
+                                        <Setter TargetName="PreviewActions" Property="Opacity" Value="1" />
+                                        <Setter TargetName="PreviewActions" Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                        <Setter TargetName="PreviewActions" Property="Opacity" Value="1" />
+                                        <Setter TargetName="PreviewActions" Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                IsHitTestVisible="False"
+                                Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                        <ui:SymbolIcon Symbol="Clipboard24"
+                                       FontSize="38"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <TextBlock Text="复制的内容会出现在这里"
+                                   Margin="0,10,0,0"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding HotkeyText, StringFormat=按 {0} 打开}"
+                                   Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <TextBlock Text="右键条目可执行扩展动作（如已导入）"
+                                   Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Footer. Extension actions live in the per-clip right-click menu now; a bottom
+                     strip competes with the left-click paste and needed a selected item first. -->
+                <Grid Grid.Row="3" Margin="12,0,10,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Secondary (not tertiary) so the count stays legible on the acrylic panel. -->
+                    <TextBlock Text="{Binding CountText}"
+                               VerticalAlignment="Center"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding HotkeyText}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Button Content="清空"
+                                Style="{StaticResource FooterButton}"
+                                Click="Clear_Click" />
+                        <Button Content="设置"
+                                Style="{StaticResource FooterButton}"
+                                Click="Settings_Click" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

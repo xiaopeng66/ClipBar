@@ -1,0 +1,25 @@
+# Build outputs
+bin/
+obj/
+dist/
+dist-lite/
+publish/
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# Test results
+TestResults/
+*.trx
+
+# Local data that must never leave the machine
+*.db
+*.db-shm
+*.db-wal
+
+# OS noise
+Thumbs.db
+.DS_Store

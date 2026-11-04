@@ -1,0 +1,118 @@
+using System.IO;
+using ClipBar.App.Services;
+
+namespace ClipBar.App.Tests;
+
+public class ImageStoreTests
+{
+    private const string HexA = "0123456789abcdef0123456789abcdef";
+    private const string HexB = "fedcba9876543210fedcba9876543210";
+
+    private static string NewDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "clipbar-images-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void SweepOrphansReturnsZeroForMissingDirectory()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "clipbar-missing-" + Guid.NewGuid().ToString("N")[..8]);
+        Assert.Equal(0, ImageStore.SweepOrphans(dir, Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void SweepOrphansDeletesUnreferencedHashedPngs()
+    {
+        var dir = NewDir();
+        try
+        {
+            var kept = Path.Combine(dir, HexA + ".png");
+            var orphan = Path.Combine(dir, HexB + ".png");
+            File.WriteAllText(kept, "a");
+            File.WriteAllText(orphan, "b");
+
+            var removed = ImageStore.SweepOrphans(dir, new[] { kept });
+
+            Assert.Equal(1, removed);
+            Assert.True(File.Exists(kept));
+            Assert.False(File.Exists(orphan));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SweepOrphansLeavesFilesThisStoreWouldNotCreate()
+    {
+        var dir = NewDir();
+        try
+        {
+            // A user's own file, a non-hex name and a hex name of the wrong length must all survive.
+            File.WriteAllText(Path.Combine(dir, "notes.png"), "x");
+            File.WriteAllText(Path.Combine(dir, "0123456789abcdef.png"), "x");
+            File.WriteAllText(Path.Combine(dir, HexA + "-copy.png"), "x");
+            File.WriteAllText(Path.Combine(dir, HexA + ".jpg"), "x");
+
+            Assert.Equal(0, ImageStore.SweepOrphans(dir, Array.Empty<string>()));
+            Assert.Equal(4, Directory.GetFiles(dir).Length);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SweepOrphansMatchesReferencesCaseInsensitively()
+    {
+        var dir = NewDir();
+        try
+        {
+            var path = Path.Combine(dir, HexA.ToUpperInvariant() + ".png");
+            File.WriteAllText(path, "x");
+
+            var removed = ImageStore.SweepOrphans(dir, new[] { Path.Combine(dir, HexA + ".png") });
+
+            Assert.Equal(0, removed);
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SweepOrphansIgnoresBlankReferences()
+    {
+        var dir = NewDir();
+        try
+        {
+            var orphan = Path.Combine(dir, HexB + ".png");
+            File.WriteAllText(orphan, "x");
+
+            // A row with no image (a text clip) stores null/empty; that must not throw.
+            var removed = ImageStore.SweepOrphans(dir, new[] { null!, "", "   " });
+
+            Assert.Equal(1, removed);
+            Assert.False(File.Exists(orphan));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryDeleteToleratesBlankAndMissingPaths()
+    {
+        Assert.Null(Record.Exception(() => ImageStore.TryDelete(null)));
+        Assert.Null(Record.Exception(() => ImageStore.TryDelete("  ")));
+        Assert.Null(Record.Exception(
+            () => ImageStore.TryDelete(Path.Combine(Path.GetTempPath(), "nope-" + Guid.NewGuid().ToString("N")[..8] + ".png"))));
+    }
+}
