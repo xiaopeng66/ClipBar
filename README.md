@@ -1,4 +1,4 @@
-# ClipBar
+﻿# ClipBar
 
 仿 Windows 11 **Win+V** 的剪贴板历史工具，并且可以**作为 SnipDo 的剪贴板插件**（替换 SnipDo 自带的 10 条剪贴板）。
 
@@ -131,6 +131,15 @@ PowerShell 脚本会收到 `-PLAIN_TEXT`、`-URLENCODED_TEXT`、`-HTMLENCODED_TE
   不会撑大窄图或遮住扁图。图片首次渲染时才解码，宽度超过 1600px 的源图会先降到 1600px 再显示。
 - **文字渲染**：面板、托盘菜单、设置窗口统一用 `TextFormattingMode="Ideal"` + `TextRenderingMode="ClearType"`，
   在非整数缩放（如 125%）下不会出现发灰、块状的灰度抗锯齿字形。
+
+## 下载
+
+从 [GitHub Releases](https://github.com/xiaopeng66/ClipBar/releases/latest) 下载：
+
+| 文件 | 说明 |
+| --- | --- |
+| `ClipBar.exe`（约 70 MB） | 自包含单文件，双击即用，无需安装 |
+| `ClipBar-lite.exe`（约 9 MB） | 框架依赖版，需要 [.NET 10 桌面运行时](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
 ## 构建
 
