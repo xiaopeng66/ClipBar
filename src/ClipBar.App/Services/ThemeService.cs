@@ -143,15 +143,11 @@ public static class ThemeService
     /// </summary>
     public static void RestoreBackdropsWhenLoaded(Window window)
     {
-        window.Loaded += (_, _) =>
-        {
-            // The teardown can land before or after the first Loaded dispatch depending on where
-            // WPF-UI re-applies the background, so restore on a short schedule instead of once.
-            RestoreLater(window, 0);
-            RestoreLater(window, 120);
-            RestoreLater(window, 350);
-        };
-
+        // Dialogs and menus now declare WindowBackdropType=None, so showing them no longer makes
+        // WPF-UI tear down and rebuild every window's backdrop (the "panel turns white" bug) — and
+        // we no longer repaint other windows while a dialog is opening (that was a flash source).
+        // A window that used a real backdrop (the Mica settings window) still restores the others
+        // when it closes.
         window.Closed += (_, _) => RestoreBackdrops();
     }
 

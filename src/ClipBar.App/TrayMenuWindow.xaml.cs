@@ -148,8 +148,14 @@ public partial class TrayMenuWindow : FluentWindow
         var anchorX = cursorX / scale;
         var anchorY = cursorY / scale;
 
-        Left = Math.Max(work.Left + ScreenMargin, anchorX - 160);
-        Top = Math.Max(work.Top + ScreenMargin, anchorY - 40);
+        // Park at the position the menu will most likely occupy, so the first frame never jumps:
+        // a dropdown opens at the pointer, a tray menu opens above-right of it.
+        Left = aboveCursor
+            ? Math.Max(work.Left + ScreenMargin, anchorX - 176)
+            : Math.Max(work.Left + ScreenMargin, Math.Min(anchorX, work.Right - 320));
+        Top = aboveCursor
+            ? Math.Max(work.Top + ScreenMargin, anchorY - 40)
+            : Math.Min(anchorY + ScreenMargin, work.Bottom - 200);
         Show();
         UpdateLayout();
 

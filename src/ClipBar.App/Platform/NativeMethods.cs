@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace ClipBar.App.Platform;
 
@@ -34,6 +34,10 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -107,6 +111,15 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetDesktopWindow();
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WindowRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MonitorInfo

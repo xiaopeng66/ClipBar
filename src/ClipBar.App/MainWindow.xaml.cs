@@ -300,6 +300,23 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>Window inventory for the save-dialog flash reports (positions only, no content).</summary>
+    private void LogVisibleWindows(string context)
+    {
+        try
+        {
+            var list = Application.Current.Windows
+                .OfType<Window>()
+                .Where(w => w.IsVisible)
+                .Select(w => $"{w.GetType().Name}@{w.Left:0},{w.Top:0} topmost={w.Topmost}");
+            AppLog.Write($"{context}: {string.Join(" | ", list)}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Log windows", ex);
+        }
+    }
+
     private void NotifyOwned(string message, SymbolRegular symbol, string heading)
     {
         using var scope = SuppressAutoHide();
@@ -437,6 +454,12 @@ public partial class MainWindow : FluentWindow
         // The save dialog deactivates the panel; without the suppression the panel hides behind
         // it and stays hidden after the dialog closes (same mechanism as the old D-C-01).
         using var scope = SuppressAutoHide();
+
+        // A topmost panel over a shell dialog fights the dialog for the top of the z-order, which
+        // shows up as windows flashing between monitors. Drop topmost for the dialog's lifetime.
+        var wasTopmost = Topmost;
+        Topmost = false;
+        LogVisibleWindows("before save dialog");
         try
         {
             ForceForeground();
@@ -463,6 +486,8 @@ public partial class MainWindow : FluentWindow
         }
         finally
         {
+            LogVisibleWindows("after save dialog");
+            Topmost = wasTopmost;
             ForceForeground();
         }
     }
@@ -832,23 +857,54 @@ public partial class MainWindow : FluentWindow
 
             Dispatcher.InvokeAsync(async () =>
             {
-                // 80 ms: long enough for the normal Esc/click close to hand activation back to the
-                // panel, short enough that the residual is imperceptible (D-C-05).
-                await Task.Delay(80).ConfigureAwait(true);
+                // 120 ms covers the normal Esc/click hand-back to the owner. The decision is then
+                // process-based, not hwnd-based: if any window of OURS owns the foreground (panel,
+                // a dialog, the next menu) the panel must stay. Hiding whenever the foreground was
+                // not the panel itself made a second click after right-click make the panel vanish.
+                await Task.Delay(120).ConfigureAwait(true);
                 if (!IsVisible || _allowClose || AutoHideSuppressed || IsActive)
                 {
                     return;
                 }
 
-                var ownHwnd = new WindowInteropHelper(this).Handle;
-                if (NativeMethods.GetForegroundWindow() != ownHwnd)
+                // A click inside the panel dismisses the menu but must NOT take the panel with it.
+                // Windows can deliver that click to the popup only, leaving a foreign window in the
+                // foreground — so decide by where the pointer is, not only by the foreground hwnd.
+                if (CursorIsOverPanel())
                 {
-                    Hide();
+                    ForceForeground();
+                    return;
                 }
+
+                var foreground = NativeMethods.GetForegroundWindow();
+                if (foreground == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                if (PidOf(foreground) == SelfProcessId)
+                {
+                    return;
+                }
+
+                Hide();
             });
         };
 
         return scope;
+    }
+
+    /// <summary>True when the pointer is inside this window's screen rectangle.</summary>
+    private bool CursorIsOverPanel()
+    {
+        if (!NativeMethods.GetCursorPos(out var cursor)
+            || !NativeMethods.GetWindowRect(new WindowInteropHelper(this).Handle, out var rect))
+        {
+            return false;
+        }
+
+        return cursor.X >= rect.Left && cursor.X < rect.Right
+            && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
     }
 
     /// <summary>Compact source filter: a funnel button with a menu instead of a wide dropdown.</summary>
