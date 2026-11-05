@@ -37,6 +37,7 @@ public partial class AppOptionWindow : FluentWindow
             };
 
             var label = string.IsNullOrWhiteSpace(option.Identifier) ? "参数" : option.Identifier;
+            System.Windows.Automation.AutomationProperties.SetName(box, label);
             var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {

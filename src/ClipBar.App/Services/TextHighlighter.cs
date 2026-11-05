@@ -100,20 +100,22 @@ public static class TextHighlighter
         }
     }
 
-    private static Brush? _highlightBrush;
+    // Per-accent cache: a frozen brush keyed by its colour, so a theme or accent change
+    // produces a fresh brush instead of the first-run one living forever (R12-U-05).
+    private static readonly Dictionary<Color, Brush> HighlightBrushCache = new();
 
     private static Brush HighlightBrush()
     {
-        if (_highlightBrush is { } cached)
+        var accent = Application.Current?.TryFindResource("SystemAccentColor") as Color?;
+        var color = accent ?? Color.FromRgb(0x00, 0x78, 0xD4);
+        if (HighlightBrushCache.TryGetValue(color, out var cached))
         {
             return cached;
         }
 
-        var accent = Application.Current?.TryFindResource("SystemAccentColor") as Color?;
-        var color = accent ?? Color.FromRgb(0x00, 0x78, 0xD4);
         var brush = new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B));
         brush.Freeze();
-        _highlightBrush = brush;
+        HighlightBrushCache[color] = brush;
         return brush;
     }
 }

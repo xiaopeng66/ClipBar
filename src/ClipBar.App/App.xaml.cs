@@ -396,23 +396,35 @@ public partial class App : Application
 
         _settings = candidate;
 
-        // Apply() is a no-op when the theme is unchanged: re-applying it rebuilds every window's
-        // backdrop, which left the acrylic panel painted flat white after a plain 应用 click.
-        ThemeService.Apply(_settings.Theme);
-        if (!_startup.SetEnabled(_settings.StartWithWindows))
+        try
         {
-            // The registry write can fail (policy/ACL); the next launch reconciles, but say so
-            // instead of letting settings.json and the registry silently disagree (G-23).
-            AppLog.Write("Failed to update the startup entry; settings may disagree with the registry");
-        }
-        _mainWindow?.ViewModel.UpdateHotkey(_settings.Hotkey);
+            // Apply() is a no-op when the theme is unchanged: re-applying it rebuilds every
+            // window's backdrop, which left the acrylic panel painted flat white after a plain
+            // 应用 click.
+            ThemeService.Apply(_settings.Theme);
+            if (!_startup.SetEnabled(_settings.StartWithWindows))
+            {
+                // The registry write can fail (policy/ACL); the next launch reconciles, but say
+                // so instead of letting settings.json and the registry silently disagree (G-23).
+                AppLog.Write("Failed to update the startup entry; settings may disagree with the registry");
+            }
+            _mainWindow?.ViewModel.UpdateHotkey(_settings.Hotkey);
 
-        // The panel reads the image preview mode through a dependency property so the per-item
-        // size bindings re-run; a plain field would leave the old sizing until the next restart.
-        if (_mainWindow is { } panel)
+            // The panel reads the image preview mode through a dependency property so the
+            // per-item size bindings re-run; a plain field would leave the old sizing until the
+            // next restart.
+            if (_mainWindow is { } panel)
+            {
+                panel.ImagePreviewMode = _settings.ImagePreview;
+                panel.ViewModel.SetImagePreviewMode(_settings.ImagePreview);
+            }
+        }
+        catch (Exception ex)
         {
-            panel.ImagePreviewMode = _settings.ImagePreview;
-            panel.ViewModel.SetImagePreviewMode(_settings.ImagePreview);
+            // The candidate is already live; the caller keeps the form dirty so the state the
+            // user sees is what is running (R12-F-10).
+            AppLog.Error("Apply settings side effects", ex);
+            return (false, "设置已生效，但应用过程中出错：" + ex.Message);
         }
 
         if (!TrySaveSettings())

@@ -55,7 +55,7 @@ public sealed class TrayService : IDisposable
         TrayMenuEntry.Separator(),
         TrayMenuEntry.Item(_isCapturePaused() ? "恢复捕获" : "暂停捕获", _toggleCapture),
         TrayMenuEntry.Item("设置", _settings),
-        TrayMenuEntry.Item("清空历史", _clear),
+        TrayMenuEntry.Item("清空全部历史", _clear),
         TrayMenuEntry.Separator(),
         TrayMenuEntry.Item("退出", _exit),
     ];
@@ -95,7 +95,24 @@ public sealed class TrayService : IDisposable
         _menuWindow = window;
 
         // Anchor the bottom edge to the cursor so the menu opens upward like the Win11 tray menu.
-        window.ShowAt(cursor.X, cursor.Y);
+        try
+        {
+            window.ShowAt(cursor.X, cursor.Y);
+        }
+        catch (Exception ex)
+        {
+            // Same guard as the panel-side menus: a failed show must not leak the menu window
+            // or crash via the global dispatcher handler (R12-F-07).
+            AppLog.Error("Show tray menu", ex);
+            try
+            {
+                window.Close();
+            }
+            catch (Exception closeFailure)
+            {
+                AppLog.Error("Close tray menu after failed show", closeFailure);
+            }
+        }
     }
 
     /// <summary>Bottom-right corner of the primary monitor's work area, in physical pixels.</summary>

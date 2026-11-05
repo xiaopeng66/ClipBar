@@ -236,9 +236,6 @@ public sealed partial class MainViewModel : ObservableObject
 
     private Task? _initialLoad;
 
-    /// <summary>True once the first history query has finished (success or handled failure).</summary>
-    public bool IsLoaded { get; private set; }
-
     /// <summary>
     /// Single-flight first load: startup, the hotkey, the tray and <c>--show</c> all await the
     /// same task, so the panel's first visible frame already carries the history instead of an
@@ -274,7 +271,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         finally
         {
-            IsLoaded = true;
+            // The gate stays open permanently; IsEmpty/CountText carry the resulting state.
         }
     }
 

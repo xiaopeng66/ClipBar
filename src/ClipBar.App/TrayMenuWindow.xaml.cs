@@ -116,6 +116,10 @@ public partial class TrayMenuWindow : FluentWindow
                 // An entry without an action (the "no actions fit" placeholder) is disabled.
                 IsEnabled = entry.Action is not null,
             };
+            // Icon rows carry a StackPanel, whose content does not propagate a UIA name — screen
+            // readers (and every UIA client) saw an empty row. Name it explicitly (attached
+            // properties cannot be set in an object initializer).
+            System.Windows.Automation.AutomationProperties.SetName(item, entry.Header);
 
             var handler = entry.Action;
             item.Click += (_, _) =>

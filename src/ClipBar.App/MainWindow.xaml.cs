@@ -72,6 +72,9 @@ public partial class MainWindow : FluentWindow
 
     private int _foreignFocusTicks;
     private OutsideClickHook? _outsideClickHook;
+    /// <summary>Incremented on every show; queued geometry saves from the previous hide no-op
+    /// when the epoch moved on (R12-F-06).</summary>
+    private int _geometryEpoch;
 
     public MainWindow(
         IClipRepository repository,
@@ -124,8 +127,17 @@ public partial class MainWindow : FluentWindow
             _focusWatchdog.Stop();
             // Defer the geometry write off the hide path: a settings flush (fsync) here used to
             // stretch the click-away dismissal by a visible beat. Idle priority runs a moment
-            // later, off the critical path.
-            Dispatcher.BeginInvoke(new Action(SaveGeometry), DispatcherPriority.ApplicationIdle);
+            // later, off the critical path; a show in between invalidates it via the epoch.
+            var epoch = _geometryEpoch;
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    if (epoch == _geometryEpoch)
+                    {
+                        SaveGeometry();
+                    }
+                }),
+                DispatcherPriority.ApplicationIdle);
         };
 
         _focusWatchdog.Tick += (_, _) => CheckFocusWhileVisible();
@@ -174,7 +186,30 @@ public partial class MainWindow : FluentWindow
 
     private async Task ShowPanelCore(string reason)
     {
-        NativeMethods.GetCursorPos(out var cursor);
+        try
+        {
+            await ShowPanelCoreInner(reason).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Same contract as the view model's fire-and-forget wrapper: a show request that
+            // dies silently leaves the user with no panel and no clue (R12-F-01).
+            AppLog.Error("Show panel", ex);
+        }
+    }
+
+    private async Task ShowPanelCoreInner(string reason)
+    {
+        if (!NativeMethods.GetCursorPos(out var cursor))
+        {
+            // Essentially never fails on an interactive desktop; fall back to the primary
+            // work-area centre so the panel still opens somewhere sane (R12-F-05).
+            var wa = SystemParameters.WorkArea;
+            cursor = new NativeMethods.Point(
+                (int)(wa.Left + wa.Width / 2),
+                (int)(wa.Top + wa.Height / 2));
+        }
+
         await ViewModel.EnsureInitialLoadedAsync().ConfigureAwait(true);
         if (_isClosed)
         {
@@ -198,6 +233,10 @@ public partial class MainWindow : FluentWindow
                 + $"hwnd=0x{_previousForeground.ToInt64():X}, foregroundNow={NativeMethods.GetProcessName(foreground) ?? "unknown"}");
             _showCompleted = false;
             _deactivatedWhileSuppressed = false;
+            // Invalidate any geometry save still queued from the previous hide: it must not run
+            // after RestorePlacement and persist the automatic position as a user position
+            // (R12-F-06).
+            Interlocked.Increment(ref _geometryEpoch);
             // Place before the window is shown: showing first and moving afterwards can paint
             // one frame at the previous monitor/position, which reads as the panel ignoring the
             // position setting.
@@ -419,6 +458,15 @@ public partial class MainWindow : FluentWindow
 
     private void NotifyOwned(string message, SymbolRegular symbol, string heading)
     {
+        // A hidden panel must not pop an ownerless modal over whatever the user is doing:
+        // background capture failures while the user works elsewhere are log-only (the
+        // once-per-streak reporter already limits the noise) (R12-F-04).
+        if (!IsVisible)
+        {
+            AppLog.Write($"Notify while hidden: {heading}: {message}");
+            return;
+        }
+
         using var scope = SuppressAutoHide();
         try
         {
@@ -679,6 +727,9 @@ public partial class MainWindow : FluentWindow
     {
         if (_allowClose)
         {
+            // Real close (app exit): the idle-path save queued on hide can be dropped by
+            // shutdown, so persist the final geometry synchronously (R12-F-03).
+            SaveGeometry();
             return;
         }
 
@@ -939,6 +990,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private TrayMenuWindow OpenClipContextMenu(ClipItemViewModel item, int anchorX, int anchorY)
     {
+        AppLog.Write($"Clip menu open: clip={item.Id}, kind={item.Kind}, anchor={anchorX},{anchorY}");
         var actions = ViewModel.GetApplicableActions(item);
         var model = item.Model;
 
@@ -1097,7 +1149,8 @@ public partial class MainWindow : FluentWindow
     {
         var entries = new List<TrayMenuEntry>
         {
-            TrayMenuEntry.Item("全部来源", () => ViewModel.SelectedSource = "全部来源", bold: true),
+            TrayMenuEntry.Item("全部来源", () => ViewModel.SelectedSource = "全部来源",
+                bold: ViewModel.SelectedSource == "全部来源"),
         };
         foreach (var source in ViewModel.SourceOptions)
         {
@@ -1107,7 +1160,11 @@ public partial class MainWindow : FluentWindow
             }
 
             var value = source;
-            entries.Add(TrayMenuEntry.Item(value, () => ViewModel.SelectedSource = value));
+            // The current source gets the checkmark so the menu itself shows the state
+            // (R12-U-01) instead of relying on the footer dot and tooltip.
+            entries.Add(TrayMenuEntry.Item(value, () => ViewModel.SelectedSource = value,
+                bold: ViewModel.SelectedSource == value,
+                icon: ViewModel.SelectedSource == value ? MenuGlyph(SymbolRegular.Checkmark24) : null));
         }
 
         var menu = TrayMenuWindow.Create(entries, width: 0);
@@ -1166,7 +1223,7 @@ public partial class MainWindow : FluentWindow
     private static UIElement MenuGlyph(SymbolRegular symbol) => new SymbolIcon
     {
         Symbol = symbol,
-        FontSize = 14,
+        FontSize = 16,
         Width = 16,
         Height = 16,
         Margin = new Thickness(0, 0, 8, 0),

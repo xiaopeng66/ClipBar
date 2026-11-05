@@ -159,22 +159,6 @@ public static class ThemeService
         window.Closed += (_, _) => RestoreBackdrops();
     }
 
-    private static void RestoreLater(Window window, int delayMs)
-    {
-        window.Dispatcher.InvokeAsync(async () =>
-        {
-            if (delayMs > 0)
-            {
-                await Task.Delay(delayMs).ConfigureAwait(true);
-            }
-
-            if (window.IsLoaded)
-            {
-                RestoreBackdrops(window);
-            }
-        }, DispatcherPriority.Background);
-    }
-
     private static void ApplyContrastOverrides(ApplicationTheme theme)
     {
         var resources = Application.Current?.Resources;
