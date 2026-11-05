@@ -62,6 +62,11 @@ public static class ThemeService
     /// </summary>
     private static ApplicationTheme? _applied;
 
+    static ThemeService()
+    {
+        ApplicationThemeManager.Changed += OnThemeChanged;
+    }
+
     /// <summary>
     /// Applies <paramref name="setting"/> ("System", "Light" or "Dark"). Calling it again with the
     /// theme that is already active is a no-op: WPF-UI's <c>ApplicationThemeManager.Apply</c>
@@ -88,9 +93,12 @@ public static class ThemeService
         ApplicationThemeManager.Apply(theme);
         _applied = theme;
 
-        // ThemeService is the only place the app theme changes, so the overrides are
-        // re-synced here rather than through a theme-changed subscription.
+        // Apply() raises Changed, which already re-synced the overrides and the surface brush;
+        // repeat here so a theme manager that applies dictionaries without raising the event
+        // still leaves the resources consistent.
         ApplyContrastOverrides(theme);
+        SyncSurfaceBrush();
+        RefreshWindowSurfaces();
 
         // A real theme change goes through the same backdrop teardown as a no-op one, and the
         // panel is a standalone top-level window rather than an owned one, so put its backdrop
@@ -187,6 +195,84 @@ public static class ThemeService
         foreach (var (key, color) in active)
         {
             resources[key] = new SolidColorBrush(color);
+        }
+    }
+
+    /// <summary>
+    /// Keeps <c>AppSurfaceBrush</c> equal to the surface colour WPF-UI is actually painting, so
+    /// our windows can never end up with white text over a light background (dark text over a
+    /// dark one) after an external theme switch. Falls back to the nominal theme colours when
+    /// the Fluent key is missing.
+    /// </summary>
+    private static void SyncSurfaceBrush()
+    {
+        var resources = Application.Current?.Resources;
+        if (resources is null)
+        {
+            return;
+        }
+
+        var color = _applied == ApplicationTheme.Dark
+            ? Color.FromRgb(0x20, 0x20, 0x20)
+            : Color.FromRgb(0xF3, 0xF3, 0xF3);
+
+        if (Application.Current.TryFindResource("ApplicationBackgroundBrush") is SolidColorBrush fluent)
+        {
+            // Match WPF-UI's own surface exactly when it is available.
+            color = fluent.Color;
+        }
+
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        resources["AppSurfaceBrush"] = brush;
+    }
+
+    /// <summary>
+    /// WPF-UI can switch theme dictionaries itself (system theme changes with the "follow
+    /// system" setting). Without this, our contrast overrides stayed on the previous theme and
+    /// produced dark-theme white text on a light surface — the "dark theme is a white screen"
+    /// report. The handler only rewrites resources; it never calls Apply again.
+    /// </summary>
+    private static void OnThemeChanged(ApplicationTheme theme, Color systemAccent)
+    {
+        _applied = theme;
+        ApplyContrastOverrides(theme);
+        SyncSurfaceBrush();
+        RefreshWindowSurfaces();
+
+        // Changed fires before WPF-UI rebuilds window backgrounds; restoring immediately would
+        // be overwritten. One dispatcher turn later the theme manager is done.
+        Application.Current?.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                RestoreBackdrops();
+                RefreshWindowSurfaces();
+            }),
+            DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Windows with <see cref="WindowBackdropType.None"/> paint their surface from
+    /// <c>AppSurfaceBrush</c>. WPF-UI's theme manager can replace that Background with a local
+    /// brush while switching themes, which silently detaches the DynamicResource — the window
+    /// then keeps the previous theme's surface while text colours move on. Rebind explicitly.
+    /// </summary>
+    private static void RefreshWindowSurfaces()
+    {
+        var windows = Application.Current?.Windows;
+        if (windows is null)
+        {
+            return;
+        }
+
+        foreach (Window window in windows)
+        {
+            if (window is FluentWindow fluent && fluent.WindowBackdropType != WindowBackdropType.None)
+            {
+                continue;
+            }
+
+            window.SetResourceReference(Window.BackgroundProperty, "AppSurfaceBrush");
         }
     }
 

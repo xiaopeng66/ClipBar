@@ -7,7 +7,7 @@
                  Height="660"
                  WindowStartupLocation="CenterScreen"
                  WindowBackdropType="None"
-                 Background="{DynamicResource ApplicationBackgroundBrush}"
+                 Background="{DynamicResource AppSurfaceBrush}"
                  WindowCornerPreference="Round"
                  ExtendsContentIntoTitleBar="True"
                  Topmost="True"

@@ -268,7 +268,7 @@
           Background="Transparent">
 
         <Border CornerRadius="8"
-                Background="{DynamicResource ApplicationBackgroundBrush}"
+                Background="{DynamicResource AppSurfaceBrush}"
                 Opacity="0.88" />
 
         <Border CornerRadius="8"

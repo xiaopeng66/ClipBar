@@ -10,6 +10,13 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Our own window surface colour. ThemeService keeps it in sync with the active
+                 theme; transient windows bind to it instead of WPF-UI's ApplicationBackgroundBrush
+                 so the surface can never disagree with our text-colour overrides (the dark theme
+                 used to render white text on WPF-UI's light background after a system theme
+                 switch). -->
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F3F3F3" />
+
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
             <converters:PinBrushConverter x:Key="PinBrush" />
             <converters:ThumbnailSizeConverter x:Key="ThumbnailSize" />
