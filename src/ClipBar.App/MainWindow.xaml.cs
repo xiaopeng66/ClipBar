@@ -35,6 +35,7 @@ public partial class MainWindow : FluentWindow
 
     private readonly PasteService _pasteService;
     private readonly Func<AppSettings> _settings;
+    private readonly Action<double, double, double, double>? _noteGeometry;
     private readonly ExtensionActionRunner _runner;
     private IntPtr _previousForeground;
     private bool _allowClose;
@@ -48,7 +49,8 @@ public partial class MainWindow : FluentWindow
         Func<AppSettings> settings,
         PasteService pasteService,
         ExtensionService extensions,
-        Action settingsRequested)
+        Action settingsRequested,
+        Action<double, double, double, double>? noteGeometry = null)
     {
         InitializeComponent();
         _settings = settings;
@@ -64,9 +66,27 @@ public partial class MainWindow : FluentWindow
             PromptForAppOptions,
             ReportExtensionError,
             TargetProcessName,
-            ReportRefreshFailure);
+            ReportRefreshFailure,
+            (message, undo) => FluentMessageWindow.Toast(
+                message,
+                SymbolRegular.Delete24,
+                "已删除",
+                TimeSpan.FromSeconds(6),
+                actionLabel: "撤销",
+                action: undo));
         DataContext = ViewModel;
-        ImagePreviewMode = settings().ImagePreview;
+        var initial = settings();
+        Width = initial.PanelWidth;
+        Height = initial.PanelHeight;
+        _noteGeometry = noteGeometry;
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible)
+            {
+                SaveGeometry();
+            }
+        };
+        ImagePreviewMode = initial.ImagePreview;
         ViewModel.SetImagePreviewMode(ImagePreviewMode);
         SourceInitialized += OnSourceInitialized;
         Closing += OnClosing;
@@ -115,7 +135,7 @@ public partial class MainWindow : FluentWindow
                 + $"hwnd=0x{_previousForeground.ToInt64():X}, foregroundNow={NativeMethods.GetProcessName(foreground) ?? "unknown"}");
             _hasActivatedSinceShow = false;
             Show();
-            PlaceOnCursorMonitor();
+            RestorePlacement();
         }
 
         // Guarded: this runs on every panel show, so a failed query must be reported rather than
@@ -125,6 +145,65 @@ public partial class MainWindow : FluentWindow
         ForceForeground();
         SearchBox.Focus();
         SearchBox.SelectAll();
+    }
+
+    /// <summary>
+    /// Restores the saved geometry (A5) when there is one, otherwise centres on the cursor's
+    /// monitor. A saved position is clamped to the target monitor's work area, so an unplugged
+    /// monitor or a resolution change never strands the panel off-screen.
+    /// </summary>
+    private void RestorePlacement()
+    {
+        if (_userMoved)
+        {
+            return;
+        }
+
+        var saved = _settings();
+        if (!saved.HasPanelPosition)
+        {
+            PlaceOnCursorMonitor();
+            return;
+        }
+
+        var point = new NativeMethods.Point(saved.PanelLeft, saved.PanelTop);
+        var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MonitorDefaultToNearest);
+        var info = new NativeMethods.MonitorInfo
+        {
+            Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MonitorInfo>(),
+        };
+
+        if (monitor == IntPtr.Zero || !NativeMethods.GetMonitorInfo(monitor, ref info))
+        {
+            PlaceOnCursorMonitor();
+            return;
+        }
+
+        var work = info.Work;
+        var (left, top) = PanelPlacement.ClampIn(
+            saved.PanelLeft,
+            saved.PanelTop,
+            ActualWidth > 0 ? ActualWidth : Width,
+            ActualHeight > 0 ? ActualHeight : Height,
+            work.Left,
+            work.Top,
+            work.Right - work.Left,
+            work.Bottom - work.Top,
+            NativeMethods.MonitorScale(monitor));
+
+        Left = left;
+        Top = top;
+    }
+
+    /// <summary>Persists the current size/position when the panel hides or closes (A5).</summary>
+    private void SaveGeometry()
+    {
+        if (WindowState != WindowState.Normal || ActualWidth < 100 || ActualHeight < 100)
+        {
+            return;
+        }
+
+        _noteGeometry?.Invoke(Left, Top, ActualWidth, ActualHeight);
     }
 
     /// <summary>Centres the panel on the monitor under the cursor, clamped to that monitor's work area.</summary>
@@ -229,11 +308,29 @@ public partial class MainWindow : FluentWindow
         _allowClose = true;
     }
 
-    private async void PasteItem(ClipItem item)
+    private async void PasteItem(ClipItem item) => await PasteItemCore(item, plainTextOnly: false);
+
+    /// <summary>
+    /// One paste flow. <paramref name="plainTextOnly"/> skips the HTML flavour (A1);
+    /// with KeepPanelOpenAfterPaste the panel stays visible for consecutive pastes (A3) and is
+    /// re-activated afterwards so the normal deactivate-to-hide rule keeps working.
+    /// </summary>
+    private async Task PasteItemCore(ClipItem item, bool plainTextOnly)
     {
         var target = _previousForeground;
-        AppLog.Write($"Paste request: kind={item.Kind}, automatic={_settings().PasteOnClick}, target={NativeMethods.GetProcessName(target) ?? "unknown"}, hwnd=0x{target.ToInt64():X}");
-        Hide();
+        var keepOpen = _settings().KeepPanelOpenAfterPaste;
+        AppLog.Write(
+            $"Paste request: kind={item.Kind}, automatic={_settings().PasteOnClick}, plainText={plainTextOnly}, keepOpen={keepOpen}, "
+            + $"target={NativeMethods.GetProcessName(target) ?? "unknown"}, hwnd=0x{target.ToInt64():X}");
+        IDisposable? scope = null;
+        if (keepOpen)
+        {
+            scope = SuppressAutoHide();
+        }
+        else
+        {
+            Hide();
+        }
 
         // `async void` is the entry point WPF calls, so an exception here has nowhere to return
         // to: it reaches DispatcherUnhandledException, which logs and continues — but the panel is
@@ -248,7 +345,8 @@ public partial class MainWindow : FluentWindow
             // case we must not send Ctrl+V — that would paste the *previous* clipboard contents.
             // The self/zero guard lives in PasteService *after* the copy, so refusing to send
             // keys never blocks the copy itself (G-01).
-            var outcome = await _pasteService.PasteAsync(item, target, _settings().PasteOnClick, selfHwnd, SelfProcessId);
+            var outcome = await _pasteService.PasteAsync(
+                item, target, _settings().PasteOnClick, selfHwnd, SelfProcessId, plainTextOnly);
             var foreground = NativeMethods.GetForegroundWindow();
             AppLog.Write($"Paste result: {outcome}, foreground={NativeMethods.GetProcessName(foreground) ?? "unknown"}, hwnd=0x{foreground.ToInt64():X}");
             switch (outcome)
@@ -275,6 +373,54 @@ public partial class MainWindow : FluentWindow
                 "粘贴时发生错误：" + ex.Message,
                 SymbolRegular.Warning24,
                 "粘贴失败");
+        }
+        finally
+        {
+            if (scope is not null)
+            {
+                // Keep-open: hand activation back to the panel so the next click lands on it and
+                // the usual deactivate-to-hide rule still applies when the user moves on.
+                scope.Dispose();
+                ForceForeground();
+            }
+        }
+    }
+
+    /// <summary>右键图片条目：把历史里的 PNG 另存为文件（A4）。</summary>
+    private void SaveImageAs(ClipItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.ImagePath) || !System.IO.File.Exists(item.ImagePath))
+        {
+            FluentMessageWindow.Toast("这条图片的源文件已不在，无法保存。", SymbolRegular.Warning24, "保存失败");
+            return;
+        }
+
+        var name = item.ImageWidth > 0 && item.ImageHeight > 0
+            ? $"图片 {item.ImageWidth}×{item.ImageHeight}.png"
+            : "图片.png";
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "图片另存为",
+            Filter = "PNG 图片 (*.png)|*.png",
+            DefaultExt = ".png",
+            FileName = name,
+            AddExtension = true,
+            OverwritePrompt = true,
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        if (ImageStore.SaveAs(item.ImagePath, dialog.FileName))
+        {
+            AppLog.Write("Image saved as " + dialog.FileName);
+            FluentMessageWindow.Toast("图片已保存：" + System.IO.Path.GetFileName(dialog.FileName), SymbolRegular.Checkmark24, "已保存");
+        }
+        else
+        {
+            FluentMessageWindow.Toast("图片保存失败，目标位置可能不可写或同名文件被占用。", SymbolRegular.Warning24, "保存失败");
         }
     }
 
@@ -537,8 +683,31 @@ public partial class MainWindow : FluentWindow
     private TrayMenuWindow OpenClipContextMenu(ClipItemViewModel item, int anchorX, int anchorY)
     {
         var actions = ViewModel.GetApplicableActions(item);
+        var model = item.Model;
 
         var entries = new List<TrayMenuEntry>();
+        var builtIn = model.Kind switch
+        {
+            ClipKind.Text => TrayMenuEntry.Item(
+                "粘贴为纯文本",
+                () => PasteItemCore(model, plainTextOnly: true),
+                icon: MenuGlyph(SymbolRegular.TextDescription24)),
+            ClipKind.Image => TrayMenuEntry.Item(
+                "图片另存为…",
+                () => SaveImageAs(model),
+                icon: MenuGlyph(SymbolRegular.Save24)),
+            _ => (TrayMenuEntry?)null,
+        };
+
+        if (builtIn is not null)
+        {
+            entries.Add(builtIn);
+            if (actions.Count > 0)
+            {
+                entries.Add(TrayMenuEntry.Separator());
+            }
+        }
+
         foreach (var action in actions)
         {
             var entry = action;
@@ -635,27 +804,25 @@ public partial class MainWindow : FluentWindow
 
     /// <summary>A 16 DIP glyph: the package icon when it decoded, else a flash placeholder.</summary>
     private static UIElement BuildMenuGlyph(ExtensionActionViewModel entry)
-    {
-        if (entry.IconSource is { } source)
-        {
-            return new System.Windows.Controls.Image
+        => entry.IconSource is { } source
+            ? new System.Windows.Controls.Image
             {
                 Source = source,
                 Width = 16,
                 Height = 16,
                 Margin = new Thickness(0, 0, 8, 0),
                 SnapsToDevicePixels = true,
-            };
-        }
+            }
+            : MenuGlyph(SymbolRegular.Flash24);
 
-        return new SymbolIcon
-        {
-            Symbol = SymbolRegular.Flash24,
-            FontSize = 14,
-            Margin = new Thickness(0, 0, 8, 0),
-            Foreground = ThemeBrushes.Resolve("TextFillColorSecondaryBrush", ThemeBrushes.SecondaryText),
-        };
-    }
+    /// <summary>Built-in menu rows use the same 16 DIP symbol treatment as package icons.</summary>
+    private static UIElement MenuGlyph(SymbolRegular symbol) => new SymbolIcon
+    {
+        Symbol = symbol,
+        FontSize = 14,
+        Margin = new Thickness(0, 0, 8, 0),
+        Foreground = ThemeBrushes.Resolve("TextFillColorSecondaryBrush", ThemeBrushes.SecondaryText),
+    };
 
     /// <summary>
     /// Rounds the thumbnail's corners. A Border's CornerRadius cannot clip a child, so the

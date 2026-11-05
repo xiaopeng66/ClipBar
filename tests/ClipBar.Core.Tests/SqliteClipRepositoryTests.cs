@@ -1,4 +1,4 @@
-using ClipBar.Core.Clipboard;
+﻿using ClipBar.Core.Clipboard;
 using ClipBar.Core.Models;
 
 namespace ClipBar.Core.Tests;
@@ -160,6 +160,47 @@ public sealed class SqliteClipRepositoryTests : IAsyncLifetime
 
         var item = Assert.Single(items);
         Assert.Equal("keep", item.Text);
+    }
+
+    [Fact]
+    public async Task NewDatabaseGetsTheCurrentSchemaVersion()
+    {
+        Assert.Equal(2, SqliteClipRepository.CurrentSchemaVersion);
+        Assert.Equal(SqliteClipRepository.CurrentSchemaVersion, await ReadUserVersionAsync());
+    }
+
+    [Fact]
+    public async Task AnOldDatabaseIsMigratedWithoutLosingRows()
+    {
+        // Simulates a v1 file: schema present, user_version never stamped, one row inside.
+        await _repository.AddOrTouchAsync(NewText("survivor"));
+        await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA user_version = 0;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var reopened = new SqliteClipRepository(Path.Combine(_directory, "history.db"));
+        await reopened.InitializeAsync();
+
+        Assert.Equal(SqliteClipRepository.CurrentSchemaVersion, await ReadUserVersionAsync());
+        Assert.Contains(await reopened.QueryAsync(ClipFilter.All, null), x => x.Text == "survivor");
+    }
+
+    private string _connectionString => new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+    {
+        DataSource = Path.Combine(_directory, "history.db"),
+    }.ToString();
+
+    private async Task<int> ReadUserVersionAsync()
+    {
+        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA user_version;";
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
     [Fact]

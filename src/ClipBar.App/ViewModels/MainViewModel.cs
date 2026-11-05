@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.IO;
 using System.ComponentModel;
 using System.Windows.Data;
 using ClipBar.App.Services;
@@ -26,6 +27,7 @@ public sealed partial class MainViewModel : ObservableObject
     private int _refreshVersion;
     private int _extensionRunning;
     private int _refreshFailureReported;
+    private readonly Action<string, Action?>? _notifyWithAction;
 
     public MainViewModel(
         IClipRepository repository,
@@ -37,7 +39,8 @@ public sealed partial class MainViewModel : ObservableObject
         Func<SnipDoAction, IReadOnlyDictionary<string, string>?> optionPrompt,
         Action<string> reportError,
         Func<string?> targetProcessName,
-        Action<Exception>? refreshFailed = null)
+        Action<Exception>? refreshFailed = null,
+        Action<string, Action?>? notifyWithAction = null)
     {
         _repository = repository;
         _settings = settings;
@@ -49,6 +52,7 @@ public sealed partial class MainViewModel : ObservableObject
         _reportError = reportError;
         _targetProcessName = targetProcessName;
         _refreshFailed = refreshFailed ?? (_ => { });
+        _notifyWithAction = notifyWithAction;
         _hotkeyText = settings().Hotkey;
 
         ItemsView = CollectionViewSource.GetDefaultView(Items);
@@ -86,6 +90,102 @@ public sealed partial class MainViewModel : ObservableObject
         new("图片", ClipFilter.Image),
         new("文件", ClipFilter.Files),
     ];
+
+    /// <summary>Time window chips (A8); Days = 0 means no restriction.</summary>
+    public ObservableCollection<TimeFilterOption> TimeFilters { get; } =
+    [
+        new("全部时间", 0),
+        new("今天", 1),
+        new("7 天", 7),
+    ];
+
+    /// <summary>Source-app dropdown (A8), rebuilt from the current result set.</summary>
+    public ObservableCollection<string> SourceOptions { get; } = ["全部来源"];
+
+    [ObservableProperty]
+    private TimeFilterOption _selectedTimeFilter = new("全部时间", 0);
+
+    [ObservableProperty]
+    private string _selectedSource = "全部来源";
+
+    private bool _updatingSources;
+
+    partial void OnSelectedTimeFilterChanged(TimeFilterOption value)
+    {
+        FireAndForget(RefreshAsync());
+    }
+
+    partial void OnSelectedSourceChanged(string value)
+    {
+        if (!_updatingSources)
+        {
+            FireAndForget(RefreshAsync());
+        }
+    }
+
+    /// <summary>A8: time window over the clip's local timestamp.</summary>
+    public static bool MatchesTimeFilter(long updatedAtUtcMs, int days, DateTime now)
+    {
+        if (days <= 0)
+        {
+            return true;
+        }
+
+        var time = DateTimeOffset.FromUnixTimeMilliseconds(updatedAtUtcMs).LocalDateTime;
+        return days == 1
+            ? time.Date == now.Date
+            : time >= now.AddDays(-days) && time <= now.AddDays(1);
+    }
+
+    /// <summary>A8: source-app display name, matching the subtitle's capitalisation.</summary>
+    public static string SourceDisplayName(ClipItem item)
+    {
+        var name = string.IsNullOrWhiteSpace(item.SourceApp)
+            ? "未知来源"
+            : Path.GetFileNameWithoutExtension(item.SourceApp);
+        return name.Length > 0 ? char.ToUpperInvariant(name[0]) + name[1..] : name;
+    }
+
+    public static bool MatchesSourceFilter(ClipItem item, string? selected)
+        => string.IsNullOrWhiteSpace(selected)
+            || selected == "全部来源"
+            || string.Equals(SourceDisplayName(item), selected, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Rebuilds the dropdown from the unfiltered result set, keeping the selection.</summary>
+    private void UpdateSourceOptions(IReadOnlyList<ClipItem> results)
+    {
+        var names = results
+            .Select(SourceDisplayName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        names.Insert(0, "全部来源");
+        if (SourceOptions.SequenceEqual(names, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        _updatingSources = true;
+        try
+        {
+            SourceOptions.Clear();
+            foreach (var name in names)
+            {
+                SourceOptions.Add(name);
+            }
+
+            if (!SourceOptions.Contains(SelectedSource))
+            {
+                SelectedSource = "全部来源";
+            }
+        }
+        finally
+        {
+            _updatingSources = false;
+        }
+    }
 
     public ICollectionView ItemsView { get; }
 
@@ -259,7 +359,13 @@ public sealed partial class MainViewModel : ObservableObject
             // right-clicked, and neither a prompt nor a refresh may redirect the action.
             var item = request.Item.Model;
             var result = await _runner
-                .RunAsync(request.Action.Action, item.Text ?? string.Empty, item.FilePaths, appOptions)
+                .RunAsync(
+                    request.Action.Action,
+                    item.Text ?? string.Empty,
+                    item.FilePaths,
+                    appOptions,
+                    item.Html,
+                    item.SourceApp)
                 .ConfigureAwait(true);
 
             if (!result.Success)
@@ -310,10 +416,20 @@ public sealed partial class MainViewModel : ObservableObject
             existing[item.Id] = item;
         }
 
+        UpdateSourceOptions(results);
+
+        var now = DateTime.Now;
         var desired = new List<ClipItemViewModel>(results.Count);
         var needsReorder = false;
         foreach (var model in results)
         {
+            // A8: time/source chips filter the already-queried rows; the type filter stays in SQL.
+            if (!MatchesTimeFilter(model.UpdatedAt, SelectedTimeFilter.Days, now)
+                || !MatchesSourceFilter(model, SelectedSource))
+            {
+                continue;
+            }
+
             if (existing.Remove(model.Id, out var reused))
             {
                 needsReorder |= reused.Update(model);
@@ -417,9 +533,45 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        var snapshot = item.Model;
         var image = await _repository.DeleteAsync(item.Id).ConfigureAwait(true);
-        ImageStore.TryDelete(image);
+
+        // A6: keep the PNG in images/trash so 撤销 can restore the row; the file is deleted only
+        // after the undo window passes.
+        var trash = ImageStore.MoveToTrash(image);
+        _notifyWithAction?.Invoke(
+            "已删除 1 条记录",
+            () => FireAndForget(UndoDeleteAsync(snapshot, trash)));
+        if (trash is not null)
+        {
+            FireAndForget(CleanupTrashAfterDelayAsync(trash, TimeSpan.FromSeconds(8)));
+        }
+
         await RefreshAsync().ConfigureAwait(true);
+    }
+
+    private async Task UndoDeleteAsync(ClipItem snapshot, string? trashPath)
+    {
+        if (trashPath is not null)
+        {
+            // images/trash/x.png -> images/ (derived, so an isolated test workspace restores
+            // into its own folder instead of the live data directory).
+            var imagesDirectory = Path.GetDirectoryName(Path.GetDirectoryName(trashPath));
+            if (imagesDirectory is not null)
+            {
+                ImageStore.RestoreFromTrash(trashPath, imagesDirectory);
+            }
+        }
+
+        await _repository.AddOrTouchAsync(snapshot).ConfigureAwait(true);
+        AppLog.Write("Undo delete: " + snapshot.Id);
+        await RefreshAsync().ConfigureAwait(true);
+    }
+
+    private static async Task CleanupTrashAfterDelayAsync(string trashPath, TimeSpan delay)
+    {
+        await Task.Delay(delay).ConfigureAwait(true);
+        ImageStore.DeleteTrashEntry(trashPath);
     }
 
     [RelayCommand]
@@ -439,6 +591,9 @@ public sealed partial class MainViewModel : ObservableObject
 }
 
 public sealed record FilterOption(string Label, ClipFilter Value);
+
+/// <summary>Time window chip (A8): Days 0 = all, 1 = today, N = last N days.</summary>
+public sealed record TimeFilterOption(string Label, int Days);
 
 /// <summary>
 /// An extension action bound to the exact clip its menu was opened for. Executing from this

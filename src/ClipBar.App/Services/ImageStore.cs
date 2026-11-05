@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -67,6 +67,108 @@ public static class ImageStore
         }
 
         return new SavedImage(path, output.PixelWidth, output.PixelHeight, length, hash);
+    }
+
+    /// <summary>Copies a stored PNG to a user-chosen path (A4). Never re-encodes.</summary>
+    public static bool SaveAs(string sourcePath, string targetPath)
+    {
+        try
+        {
+            if (!File.Exists(sourcePath))
+            {
+                return false;
+            }
+
+            File.Copy(sourcePath, targetPath, overwrite: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Moves a deleted clip's PNG into images/trash so the 撤销 toast can bring it back (A6).
+    /// Returns the trash path, or null when there is no file to preserve.
+    /// </summary>
+    public static string? MoveToTrash(string? imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) || !Directory.Exists(Path.GetDirectoryName(imagePath)))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!File.Exists(imagePath))
+            {
+                return null;
+            }
+
+            var trash = Path.Combine(Path.GetDirectoryName(imagePath)!, "trash");
+            Directory.CreateDirectory(trash);
+            var target = Path.Combine(trash, Path.GetFileName(imagePath));
+            File.Move(imagePath, target, overwrite: true);
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Moves a trashed PNG back beside the other images (undo).</summary>
+    public static bool RestoreFromTrash(string trashPath, string imagesDirectory)
+    {
+        try
+        {
+            if (!File.Exists(trashPath))
+            {
+                return false;
+            }
+
+            Directory.CreateDirectory(imagesDirectory);
+            File.Move(trashPath, Path.Combine(imagesDirectory, Path.GetFileName(trashPath)), overwrite: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public static void DeleteTrashEntry(string? trashPath) => TryDelete(trashPath);
+
+    /// <summary>Removes trash files older than <paramref name="maxAge"/> (startup sweep, A6).</summary>
+    public static int SweepTrash(string imagesDirectory, TimeSpan maxAge)
+    {
+        var trash = Path.Combine(imagesDirectory, "trash");
+        if (!Directory.Exists(trash))
+        {
+            return 0;
+        }
+
+        var cutoff = DateTime.UtcNow - maxAge;
+        var removed = 0;
+        foreach (var file in Directory.EnumerateFiles(trash))
+        {
+            try
+            {
+                if (File.GetLastWriteTimeUtc(file) >= cutoff)
+                {
+                    continue;
+                }
+
+                File.Delete(file);
+                removed++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return removed;
     }
 
     public static void TryDelete(string? path)

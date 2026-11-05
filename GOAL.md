@@ -253,6 +253,19 @@
 - [x] 死代码清理：两个未绑定命令与 closeRequested 管线、扩展动作死成员、孤儿转换器、7 个幽灵命名
 - [x] 新增跨年日期测试；**386 例全绿**（App 204 + Core 182）；编码检查 OK；双版本发布并实测验收
 
+### v1.1.0（2026-11-05，连续实施完成）
+
+- [x] 阶段一：托盘暂停捕获（会话级）、粘贴后保持面板、右键「粘贴为纯文本」、图片另存为
+- [x] 阶段二：SQLite schema 迁移机制（PRAGMA user_version + 事务迁移）、settings 版本字段与
+      Theme 规范化、数据目录可重定向（--data-dir / portable.marker，实例名派生）
+- [x] 阶段三：面板可调尺寸+跨会话记忆（工作区夹取）、删除撤销（trash + 6 秒 Toast）、
+      搜索命中高亮、今天/7天与来源应用过滤
+- [x] 阶段四：动作执行注册表（Register 即扩展）、脚本 stdin JSON（text/html/filePaths/sourceApp/options）
+- [x] 实测：440→ 测试 **420 例全绿**（App 232 + Core 188）；真机验收筛选芯片/来源下拉、
+      菜单内置项（文本/图片分别正确）、尺寸 800×1000px 调整后跨重启保持
+- [x] 关键修复：PowerShell 5.1 Console.In 保留 BOM 导致 JSON 解析失败 → 无 BOM 负载（非 ASCII 转义）
+- [x] 发布 v1.1.0（GitHub Release 双资产）
+
 ### GitHub 发布 v1.0.0（2026-11-04）
 
 - [x] 仓库：https://github.com/xiaopeng66/ClipBar （public，MIT License，main 分支）

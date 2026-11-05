@@ -238,6 +238,50 @@ public class ViewModelStressTests
         Assert.Equal(777, repository.LastLimit);
     });
 
+    // ---- A6: delete offers undo and undo restores the row ----
+
+    [Fact]
+    public void DeleteOffersUndoAndUndoRestoresTheRow() => RunOnUiThread(async () =>
+    {
+        using var workspace = new Workspace();
+        var repository = await NewRepositoryAsync(workspace);
+        await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = "undo me" });
+
+        Action? undo = null;
+        var vm = new MainViewModel(
+            repository,
+            () => new AppSettings(),
+            _ => { },
+            () => { },
+            new ExtensionService(Path.Combine(workspace.Root, "extensions")),
+            new ExtensionActionRunner(() => IntPtr.Zero),
+            _ => null,
+            _ => { },
+            () => null,
+            refreshFailed: null,
+            notifyWithAction: (_, action) => undo = action);
+
+        await vm.RefreshAsync();
+        var item = Assert.Single(vm.Items);
+
+        await vm.DeleteCommand.ExecuteAsync(item);
+
+        Assert.Empty(vm.Items);
+        Assert.NotNull(undo);
+
+        undo!();
+
+        // Undo is fire-and-forget on the UI thread; wait for the row to come back.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && vm.Items.Count == 0)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.Contains(vm.Items, x => x.Model.Text == "undo me");
+        Assert.Equal(1, await repository.CountAsync());
+    });
+
     // ---- right-click menu: per-clip matching and captured-clip execution ----
 
     [Fact]

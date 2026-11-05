@@ -154,6 +154,7 @@
                 <StackPanel Style="{StaticResource Section}">
                     <TextBlock Text="行为" Style="{StaticResource SectionTitle}" />
                     <CheckBox x:Name="PasteOnClickCheck" Content="点击条目后自动粘贴到之前的窗口" Margin="0,0,0,8" />
+                    <CheckBox x:Name="KeepPanelOpenCheck" Content="粘贴后保持面板打开（便于连续粘贴）" Margin="0,0,0,8" />
                     <CheckBox x:Name="StartWithWindowsCheck" Content="开机自动启动" Margin="0,0,0,8" />
                     <CheckBox x:Name="CaptureImagesCheck" Content="记录图片" Margin="0,0,0,8" />
                     <CheckBox x:Name="CaptureFilesCheck" Content="记录文件列表" Margin="0,0,0,8" />

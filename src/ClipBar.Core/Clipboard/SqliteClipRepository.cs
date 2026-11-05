@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ClipBar.Core.Models;
 using Microsoft.Data.Sqlite;
 
@@ -8,6 +8,9 @@ public sealed class SqliteClipRepository : IClipRepository
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    /// <summary>Bump together with a new step in <see cref="MigrateAsync"/> (C1).</summary>
+    public const int CurrentSchemaVersion = 2;
+
     private bool _initialized;
 
     public SqliteClipRepository(string databasePath)
@@ -89,12 +92,47 @@ public sealed class SqliteClipRepository : IClipRepository
                 CREATE INDEX IF NOT EXISTS idx_clips_order ON clips(is_pinned DESC, updated_at DESC);
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            // Schema versioning (C1): migrations run on old databases before any query uses the
+            // new layout. v1 -> v2 adds no columns; this establishes the mechanism so a future
+            // column can never silently break an existing history file.
+            await using var versionCommand = connection.CreateCommand();
+            versionCommand.CommandText = "PRAGMA user_version;";
+            var version = Convert.ToInt32(await versionCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
+            if (version < CurrentSchemaVersion)
+            {
+                await MigrateAsync(connection, version, cancellationToken).ConfigureAwait(false);
+            }
+
             _initialized = true;
         }
         finally
         {
             _initLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Applies every pending schema step in one transaction, then stamps user_version. Each new
+    /// column becomes a numbered case here; the table is never recreated, so history survives.
+    /// </summary>
+    private static async Task MigrateAsync(
+        SqliteConnection connection,
+        int fromVersion,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        // v1 -> v2 (baseline): no schema change. Future steps run in ascending order:
+        // if (fromVersion < 3) { ALTER TABLE clips ADD COLUMN note TEXT; }
+        _ = fromVersion;
+
+        await using var stamp = connection.CreateCommand();
+        stamp.Transaction = transaction;
+        stamp.CommandText = $"PRAGMA user_version = {CurrentSchemaVersion};";
+        await stamp.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ClipItem> AddOrTouchAsync(ClipItem item, CancellationToken cancellationToken = default)

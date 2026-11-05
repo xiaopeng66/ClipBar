@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -24,6 +24,12 @@ public sealed class ClipboardMonitor : IDisposable
     private readonly Action<ClipItem> _onCaptured;
     private readonly HwndSource _source;
     private readonly DispatcherTimer _debounce;
+    /// <summary>
+    /// Session-scoped capture pause from the tray menu (A2, v1.1.0). Deliberately not persisted:
+    /// a forgotten pause would silently stop recording for weeks.
+    /// </summary>
+    public bool IsPaused { get; set; }
+
     private long _suppressUntil;
     private string? _suppressedWriteHash;
     private bool _disposed;
@@ -98,7 +104,7 @@ public sealed class ClipboardMonitor : IDisposable
 
     private async Task CaptureAsync()
     {
-        if (_disposed)
+        if (_disposed || IsPaused)
         {
             return;
         }

@@ -1,4 +1,4 @@
-namespace ClipBar.App.Platform;
+﻿namespace ClipBar.App.Platform;
 
 /// <summary>
 /// Pure placement math for the panel: centre a window on the monitor under the cursor.
@@ -25,6 +25,34 @@ public static class PanelPlacement
     /// <param name="height">Window height in DIPs of the current monitor.</param>
     /// <param name="currentScale">Scale factor of the monitor the window is currently on.</param>
     /// <param name="targetScale">Scale factor of the monitor the panel will move to.</param>
+    /// <summary>
+    /// Clamps a saved window position so the whole window stays inside the work area (A5).
+    /// Position and sizes are DIPs; the work area is physical pixels.
+    /// </summary>
+    public static (double Left, double Top) ClampIn(
+        double left,
+        double top,
+        double width,
+        double height,
+        int workLeft,
+        int workTop,
+        int workWidth,
+        int workHeight,
+        double scale)
+    {
+        var s = Sanitize(scale);
+        var wl = workLeft / s;
+        var wt = workTop / s;
+        var wr = (workLeft + workWidth) / s;
+        var wb = (workTop + workHeight) / s;
+
+        // When the window is wider than the work area, keep it at the left edge; clamping must
+        // never produce a lower bound above the upper bound.
+        var maxLeft = Math.Max(wl, wr - width);
+        var maxTop = Math.Max(wt, wb - height);
+        return (Math.Clamp(left, wl, maxLeft), Math.Clamp(top, wt, maxTop));
+    }
+
     public static (double Left, double Top) CenterIn(
         int workLeft,
         int workTop,

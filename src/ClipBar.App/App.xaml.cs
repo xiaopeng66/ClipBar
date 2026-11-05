@@ -43,6 +43,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Data location must be settled before anything reads AppPaths (log, settings, DB):
+        // --data-dir, then a portable.marker next to the exe, then %LOCALAPPDATA%\ClipBar.
+        AppPaths.Initialize(ReadOption(e.Args, "--data-dir"), AppContext.BaseDirectory);
+        if (!AppPaths.IsDefaultLocation)
+        {
+            AppLog.Write("Data directory: " + AppPaths.DataDirectory);
+        }
+
         // Headless maintenance: rebuild (and optionally install) the SnipDo plugin from the
         // same exe, so this path can be scripted without opening any window.
         if (PluginCommandRunner.IsRequested(e.Args))
@@ -60,7 +68,9 @@ public partial class App : Application
         // running instance; --show is what makes that explicit at the call site.
         var showOnStart = e.Args.Any(arg => string.Equals(arg, "--show", StringComparison.OrdinalIgnoreCase));
 
-        _singleInstance = SingleInstanceGuard.TryAcquire(MutexName, ShowEventName);
+        _singleInstance = SingleInstanceGuard.TryAcquire(
+            MutexName + AppPaths.InstanceSuffix,
+            ShowEventName + AppPaths.InstanceSuffix);
         if (_singleInstance is null)
         {
             Shutdown();
@@ -91,6 +101,9 @@ public partial class App : Application
             {
                 var referenced = await _repository.GetImagePathsAsync();
                 var swept = ImageStore.SweepOrphans(AppPaths.ImagesDirectory, referenced);
+                // Undo-deleted images wait in images/trash for a short window (A6); clear the ones
+                // nobody restored, e.g. after a crash during that window.
+                ImageStore.SweepTrash(AppPaths.ImagesDirectory, TimeSpan.FromHours(1));
                 if (swept > 0)
                 {
                     AppLog.Write($"已清理 {swept} 个无引用的图片文件");
@@ -114,9 +127,16 @@ public partial class App : Application
                 () => _settings,
                 _pasteService,
                 _extensions,
-                ShowSettings);
+                ShowSettings,
+                NotePanelGeometry);
 
-            _tray = new TrayService(() => ShowPanel("tray"), ShowSettings, ClearAllHistory, ExitApp);
+            _tray = new TrayService(
+                () => ShowPanel("tray"),
+                ShowSettings,
+                ClearAllHistory,
+                ExitApp,
+                () => _monitor.IsPaused,
+                ToggleCapturePaused);
 
             // G-02: a show signal can arrive while the repository init is still awaiting, before
             // the window exists; it used to vanish silently. Consume it now instead.
@@ -250,6 +270,51 @@ public partial class App : Application
         }
         _settingsWindow?.Hide();
         window.ShowPanel(reason);
+    }
+
+    /// <summary>Persists the panel's size/position (A5) — called from MainWindow on hide.</summary>
+    private void NotePanelGeometry(double left, double top, double width, double height)
+    {
+        var next = _settings.Clone();
+        next.HasPanelPosition = true;
+        next.PanelLeft = (int)Math.Round(left);
+        next.PanelTop = (int)Math.Round(top);
+        next.PanelWidth = (int)Math.Round(width);
+        next.PanelHeight = (int)Math.Round(height);
+        next.Normalize();
+
+        if (next.ContentEquals(_settings))
+        {
+            return;
+        }
+
+        _settings = next;
+        TrySaveSettings();
+    }
+
+    /// <summary>Value of <paramref name="name"/> when followed by one argument.</summary>
+    private static string? ReadOption(string[] args, string name)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+            {
+                return args[i + 1];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Tray menu 暂停捕获/恢复捕获 (A2): session-scoped, not persisted.</summary>
+    private void ToggleCapturePaused()
+    {
+        _monitor.IsPaused = !_monitor.IsPaused;
+        _tray.UpdateCaptureState(_monitor.IsPaused);
+        _tray.ShowBalloon(
+            _monitor.IsPaused ? "已暂停捕获" : "已恢复捕获",
+            _monitor.IsPaused ? "期间复制的内容不会被记录。" : "新的复制内容会继续记录。");
+        AppLog.Write(_monitor.IsPaused ? "Capture paused from tray" : "Capture resumed from tray");
     }
 
     private void OnClipCaptured(ClipItem item)

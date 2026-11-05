@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using ClipBar.App.Platform;
@@ -49,12 +49,19 @@ public partial class FluentMessageWindow : FluentWindow
         string message,
         SymbolRegular symbol = SymbolRegular.Info24,
         string? heading = null,
-        TimeSpan? duration = null)
+        TimeSpan? duration = null,
+        string? actionLabel = null,
+        Action? action = null)
     {
         var window = new FluentMessageWindow { _modal = false, Topmost = false };
         window.Glyph.Symbol = symbol;
         window.MessageText.Text = message;
-        window.PrimaryButton.Content = "确定";
+        window.PrimaryButton.Content = actionLabel ?? "确定";
+        if (action is not null)
+        {
+            // Runs after the built-in handler closed the (non-modal) window.
+            window.PrimaryButton.Click += (_, _) => action();
+        }
         window.SecondaryButton.Visibility = Visibility.Collapsed;
         window.Title = heading ?? "ClipBar";
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;

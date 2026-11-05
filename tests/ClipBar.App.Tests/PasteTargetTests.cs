@@ -1,4 +1,4 @@
-using ClipBar.App.Services;
+﻿using ClipBar.App.Services;
 
 namespace ClipBar.App.Tests;
 
@@ -22,6 +22,19 @@ public class PasteTargetTests
     public void KeysAreRefusedForUnknownAndSelfTargets(long target)
     {
         Assert.False(PasteTarget.CanSendKeys(new IntPtr(target), SelfHwnd, SelfPid, PidOf));
+    }
+
+    [Fact]
+    public void InstanceSuffixIsStableAndDirectorySpecific()
+    {
+        var a = ClipBar.App.AppPaths.InstanceSuffixFor(@"C:\data\clipbar");
+        var b = ClipBar.App.AppPaths.InstanceSuffixFor(@"C:\data\clipbar");
+        var c = ClipBar.App.AppPaths.InstanceSuffixFor(@"D:\portable\clipbar");
+
+        Assert.Equal(a, b);
+        Assert.NotEqual(a, c);
+        Assert.StartsWith(".", a);
+        Assert.Equal(9, a.Length);
     }
 
     [Fact]

@@ -78,6 +78,8 @@ public class AppSettingsComparisonTests
             case "Theme": edited.Theme = "Light"; break;
             case "ImagePreview": edited.ImagePreview = "Small"; break;
             case "PasteOnClick": edited.PasteOnClick = false; break;
+            case "KeepPanelOpenAfterPaste": edited.KeepPanelOpenAfterPaste = true; break;
+            case "PanelWidth": edited.PanelWidth = 700; break;
             case "StartWithWindows": edited.StartWithWindows = true; break;
             case "CaptureImages": edited.CaptureImages = false; break;
             case "CaptureFiles": edited.CaptureFiles = false; break;
@@ -105,6 +107,34 @@ public class AppSettingsComparisonTests
     }
 
     [Fact]
+    public void PanelGeometryIsClampedToTheSupportedRange()
+    {
+        var tiny = new AppSettings { PanelWidth = 100, PanelHeight = 100 }.Normalize();
+        Assert.Equal(360, tiny.PanelWidth);
+        Assert.Equal(480, tiny.PanelHeight);
+
+        var huge = new AppSettings { PanelWidth = 9999, PanelHeight = 9999 }.Normalize();
+        Assert.Equal(2000, huge.PanelWidth);
+        Assert.Equal(1600, huge.PanelHeight);
+    }
+
+    [Fact]
+    public void ThemeCanonicalisesToTheThreeSupportedValues()
+    {
+        Assert.Equal("System", new AppSettings { Theme = "nonsense" }.Normalize().Theme);
+        Assert.Equal("Light", new AppSettings { Theme = " light " }.Normalize().Theme);
+        Assert.Equal("Dark", new AppSettings { Theme = "DARK" }.Normalize().Theme);
+        Assert.Equal("System", new AppSettings { Theme = "" }.Normalize().Theme);
+    }
+
+    [Fact]
+    public void VersionDefaultIsTheCurrentFormat()
+    {
+        Assert.Equal(2, new AppSettings().Version);
+        Assert.Equal(2, new AppSettings().Clone().Version);
+    }
+
+    [Fact]
     public void NullOther_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => new AppSettings().ContentEquals(null!));
@@ -126,7 +156,7 @@ public class AppSettingsComparisonTests
         var normalized = settings.Normalize();
 
         Assert.Equal(string.Empty, normalized.Hotkey);
-        Assert.Equal(string.Empty, normalized.Theme);
+        Assert.Equal("System", normalized.Theme); // C2: null/empty canonicalises to System
         Assert.Equal("Large", normalized.ImagePreview);
         Assert.Empty(normalized.ExcludedApps);
     }

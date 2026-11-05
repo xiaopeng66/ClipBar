@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using ClipBar.App.Services;
 using ClipBar.Core.Models;
 
@@ -125,6 +125,65 @@ public class ExtensionActionRunnerTests
             {
             }
         }
+    }
+
+    // ---- C4: the executor registry replaces the hardcoded kind switch ----
+
+    [Fact]
+    public async Task RegisteringAnExecutorMakesANewKindRunnable()
+    {
+        var runner = NewRunner();
+        runner.Register(
+            SnipDoActionKind.None,
+            (_, _) => Task.FromResult(new ActionResult(true, "from-registry", null)));
+
+        var result = await runner.RunAsync(new SnipDoAction { Title = "custom" }, "text", null, null);
+
+        Assert.True(result.Success);
+        Assert.Equal("from-registry", result.Output);
+    }
+
+    [Fact]
+    public void ContextJsonCarriesTheScriptFacingFields()
+    {
+        var context = new SnipDoTextContext(
+            "hello \"quoted\"",
+            new[] { "C:/a.zip" },
+            new Dictionary<string, string> { ["engine"] = "bing" })
+        {
+            Html = "<b>x</b>",
+            SourceApp = "msedge.exe",
+        };
+
+        using var document = System.Text.Json.JsonDocument.Parse(ExtensionActionRunner.BuildContextJson(context));
+        var root = document.RootElement;
+
+        Assert.Equal("hello \"quoted\"", root.GetProperty("text").GetString());
+        Assert.Equal("<b>x</b>", root.GetProperty("html").GetString());
+        Assert.Equal("msedge.exe", root.GetProperty("sourceApp").GetString());
+        Assert.Equal("C:/a.zip", root.GetProperty("filePaths")[0].GetString());
+        Assert.Equal("bing", root.GetProperty("options").GetProperty("engine").GetString());
+    }
+
+    [Fact]
+    public async Task ScriptCanReadTheContextJsonFromStdin()
+    {
+        using var workspace = new Workspace();
+        var output = Path.Combine(workspace.Root, "seen.txt");
+        workspace.WriteScript(
+            "read.ps1",
+            "$ctx = [Console]::In.ReadToEnd() | ConvertFrom-Json" + Environment.NewLine +
+            "Set-Content -LiteralPath '" + output + "' -Value ($ctx.filePaths -join ',')" + Environment.NewLine +
+            "Write-Output 'ok'");
+
+        var result = await NewRunner().RunAsync(
+            PowerShellAction("read.ps1", workspace.Root),
+            "clip text",
+            new[] { "C:/picked/report.docx" },
+            null);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("C:/picked/report.docx", File.ReadAllText(output).Trim());
     }
 
     // ---- positive control: a legitimate in-package script does run -------

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using ClipBar.Core.Models;
 using ClipBar.Core.Settings;
 
@@ -253,7 +253,7 @@ public class JsonSettingsStoreTests
         Assert.Null(store.LastLoadWarning);
         Assert.Equal(300, loaded.MaxItems);
         Assert.Equal(string.Empty, loaded.Hotkey);
-        Assert.Equal(string.Empty, loaded.Theme);
+        Assert.Equal("System", loaded.Theme); // C2 canonicalisation
         Assert.Equal("Large", loaded.ImagePreview);
         Assert.Empty(loaded.ExcludedApps);
     }

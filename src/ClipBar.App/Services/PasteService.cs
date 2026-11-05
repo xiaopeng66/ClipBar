@@ -1,4 +1,4 @@
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -69,7 +69,14 @@ public sealed class PasteService
     /// the clipboard race. The caller must not paste in that case: a blind Ctrl+V would inject
     /// whatever the clipboard held *before* (often the password the user copied last).
     /// </summary>
-    public async Task<bool> SetClipboardAsync(ClipItem item)
+    /// <summary>
+    /// Whether this write should include the HTML flavour. "Paste as plain text" (A1) and
+    /// clips without HTML both skip it, so the target editor receives unformatted text.
+    /// </summary>
+    public static bool ShouldWriteHtml(ClipItem item, bool plainTextOnly)
+        => !plainTextOnly && !string.IsNullOrWhiteSpace(item.Html);
+
+    public async Task<bool> SetClipboardAsync(ClipItem item, bool plainTextOnly = false)
     {
         // The hash lets the monitor filter our own write out after the window expires while still
         // capturing a genuine user copy made inside it (G-10).
@@ -108,9 +115,9 @@ public sealed class PasteService
                     {
                         var data = new DataObject();
                         data.SetData(DataFormats.UnicodeText, item.Text ?? string.Empty);
-                        if (!string.IsNullOrWhiteSpace(item.Html))
+                        if (ShouldWriteHtml(item, plainTextOnly))
                         {
-                            data.SetData(DataFormats.Html, HtmlFormatHelper.Build(item.Html, item.Text));
+                            data.SetData(DataFormats.Html, HtmlFormatHelper.Build(item.Html!, item.Text));
                         }
 
                         Clipboard.SetDataObject(data, copy: true);
@@ -189,9 +196,10 @@ public sealed class PasteService
         IntPtr targetWindow,
         bool paste,
         IntPtr selfWindow = default,
-        uint selfProcessId = 0)
+        uint selfProcessId = 0,
+        bool plainTextOnly = false)
     {
-        if (!await SetClipboardAsync(item).ConfigureAwait(true))
+        if (!await SetClipboardAsync(item, plainTextOnly).ConfigureAwait(true))
         {
             return PasteOutcome.CopyFailed;
         }

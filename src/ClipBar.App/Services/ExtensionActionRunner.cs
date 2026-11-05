@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -19,29 +19,47 @@ public sealed class ExtensionActionRunner
     private readonly InputSimulator _input = new();
     private readonly Func<IntPtr> _targetWindow;
 
+    /// <summary>
+    /// Kind → executor (C4). Adding a new action type is one Register call at composition time
+    /// instead of editing this class in four places.
+    /// </summary>
+    private readonly Dictionary<SnipDoActionKind, Func<SnipDoAction, SnipDoTextContext, Task<ActionResult>>> _executors;
+
     public ExtensionActionRunner(Func<IntPtr> targetWindow)
     {
         _targetWindow = targetWindow;
+        _executors = new Dictionary<SnipDoActionKind, Func<SnipDoAction, SnipDoTextContext, Task<ActionResult>>>
+        {
+            [SnipDoActionKind.Url] = (action, context) => Task.FromResult(OpenUrl(action, context)),
+            [SnipDoActionKind.PowerShell] = RunPowerShellAsync,
+            [SnipDoActionKind.Python] = RunPythonAsync,
+            [SnipDoActionKind.KeyCombo] = (action, context) => Task.FromResult(SendKeys(action, context)),
+        };
     }
+
+    /// <summary>Registers or replaces the executor for one action kind (C4).</summary>
+    public void Register(SnipDoActionKind kind, Func<SnipDoAction, SnipDoTextContext, Task<ActionResult>> executor)
+        => _executors[kind] = executor;
 
     /// <summary>Runs the action and applies its "after" behaviour.</summary>
     public async Task<ActionResult> RunAsync(
         SnipDoAction action,
         string text,
         IReadOnlyList<string>? filePaths,
-        IReadOnlyDictionary<string, string>? appOptions)
+        IReadOnlyDictionary<string, string>? appOptions,
+        string? html = null,
+        string? sourceApp = null)
     {
-        var context = new SnipDoTextContext(text, filePaths ?? [], appOptions);
+        var context = new SnipDoTextContext(text, filePaths ?? [], appOptions)
+        {
+            Html = html,
+            SourceApp = sourceApp,
+        };
         try
         {
-            var result = action.Kind switch
-            {
-                SnipDoActionKind.Url => OpenUrl(action, context),
-                SnipDoActionKind.PowerShell => await RunPowerShellAsync(action, context).ConfigureAwait(true),
-                SnipDoActionKind.Python => await RunPythonAsync(action, context).ConfigureAwait(true),
-                SnipDoActionKind.KeyCombo => SendKeys(action, context),
-                _ => new ActionResult(false, null, "这个动作没有可执行的类型。"),
-            };
+            var result = _executors.TryGetValue(action.Kind, out var executor)
+                ? await executor(action, context).ConfigureAwait(true)
+                : new ActionResult(false, null, "这个动作没有可执行的类型。");
 
             if (result.Success && !string.IsNullOrEmpty(result.Output))
             {
@@ -105,6 +123,7 @@ public sealed class ExtensionActionRunner
             WorkingDirectory = Path.GetDirectoryName(script)!,
             StandardOutputEncoding = System.Text.Encoding.UTF8,
             StandardErrorEncoding = System.Text.Encoding.UTF8,
+            RedirectStandardInput = true,
         };
 
         startInfo.ArgumentList.Add("-NoProfile");
@@ -115,7 +134,11 @@ public sealed class ExtensionActionRunner
         startInfo.ArgumentList.Add(script);
         AddContextArguments(startInfo, context);
 
-        return await RunProcessAsync(startInfo, "PowerShell").ConfigureAwait(true);
+        // C5: full context as JSON on stdin. No BOM: PowerShell's Console.In keeps a BOM as a
+        // character and ConvertFrom-Json then fails. System.Text.Json escapes every non-ASCII
+        // character, so the payload is pure ASCII and parses whatever code page the host uses.
+        return await RunProcessAsync(startInfo, "PowerShell", BuildContextJson(context))
+            .ConfigureAwait(true);
     }
 
     private static async Task<ActionResult> RunPythonAsync(SnipDoAction action, SnipDoTextContext context)
@@ -136,13 +159,31 @@ public sealed class ExtensionActionRunner
             WorkingDirectory = Path.GetDirectoryName(script)!,
             StandardOutputEncoding = System.Text.Encoding.UTF8,
             StandardErrorEncoding = System.Text.Encoding.UTF8,
+            RedirectStandardInput = true,
         };
+        // UTF-8 mode: JSON on stdin must decode as UTF-8 regardless of the system code page.
+        startInfo.Environment["PYTHONUTF8"] = "1";
         startInfo.ArgumentList.Add("-I");   // isolated: ignore PYTHONPATH/cwd imports planted beside the script
         startInfo.ArgumentList.Add(script);
         AddContextArguments(startInfo, context);
 
-        return await RunProcessAsync(startInfo, "Python").ConfigureAwait(true);
+        return await RunProcessAsync(startInfo, "Python", BuildContextJson(context)).ConfigureAwait(true);
     }
+
+    /// <summary>
+    /// The stdin payload for script actions (C5): everything the argv parameters cannot carry —
+    /// the file list, the HTML flavour and the source app. Keys are camelCase for scripts.
+    /// </summary>
+    public static string BuildContextJson(SnipDoTextContext context)
+        => System.Text.Json.JsonSerializer.Serialize(new
+        {
+            text = context.Text,
+            html = context.Html,
+            filePaths = context.FilePaths,
+            sourceApp = context.SourceApp,
+            urls = context.Urls,
+            options = context.AppOptions,
+        });
 
     /// <summary>
     /// The argument set both script hosts receive. Python previously got none of these, so any
@@ -173,7 +214,10 @@ public sealed class ExtensionActionRunner
     /// Runs a child process to completion. Both streams are drained concurrently: reading stdout
     /// to the end before touching stderr deadlocks as soon as the script fills the stderr pipe.
     /// </summary>
-    private static async Task<ActionResult> RunProcessAsync(ProcessStartInfo startInfo, string displayName)
+    private static async Task<ActionResult> RunProcessAsync(
+        ProcessStartInfo startInfo,
+        string displayName,
+        string? stdinPayload = null)
     {
         Process? process;
         try
@@ -195,10 +239,39 @@ public sealed class ExtensionActionRunner
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();
 
+            // Write stdin concurrently with draining the output pipes: a multi-hundred-KB clip
+            // would otherwise deadlock against a child that reads stdout before stdin.
+            var stdinTask = Task.CompletedTask;
+            if (stdinPayload is not null)
+            {
+                stdinTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await process.StandardInput.WriteAsync(stdinPayload).ConfigureAwait(false);
+                        await process.StandardInput.FlushAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+                    {
+                        // The script exited without reading stdin; its exit code decides.
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            process.StandardInput.Close();
+                        }
+                        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+                        {
+                        }
+                    }
+                });
+            }
+
             using var timeout = new CancellationTokenSource(ScriptTimeout);
             try
             {
-                await process.WaitForExitAsync(timeout.Token).ConfigureAwait(true);
+                await Task.WhenAll(process.WaitForExitAsync(timeout.Token), stdinTask).ConfigureAwait(true);
             }
             catch (OperationCanceledException)
             {
@@ -407,6 +480,12 @@ public sealed class SnipDoTextContext(
     IReadOnlyDictionary<string, string>? appOptions)
 {
     public string Text { get; } = text;
+
+    /// <summary>Rich-text source of the clip, exposed to scripts over stdin (C5).</summary>
+    public string? Html { get; init; }
+
+    /// <summary>Process that copied the clip, exposed to scripts over stdin (C5).</summary>
+    public string? SourceApp { get; init; }
 
     public IReadOnlyList<string> FilePaths { get; } = filePaths;
 

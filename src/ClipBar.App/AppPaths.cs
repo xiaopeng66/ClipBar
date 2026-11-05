@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 namespace ClipBar.App;
 
 public static class AppPaths
@@ -12,9 +12,58 @@ public static class AppPaths
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Clipboard11");
 
-    public static string DataDirectory { get; } = Path.Combine(
+    private const string DefaultFolderName = "ClipBar";
+
+    /// <summary>
+    /// Data location. Defaults to %LOCALAPPDATA%\ClipBar; <see cref="Initialize"/> redirects it
+    /// for --data-dir and portable copies (C3). Not readonly so the redirect is possible, but it
+    /// must be set before any other member is used — OnStartup does that first.
+    /// </summary>
+    public static string DataDirectory { get; private set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ClipBar");
+        DefaultFolderName);
+
+    /// <summary>True while the default location is used, i.e. the legacy-directory migration applies.</summary>
+    public static bool IsDefaultLocation { get; private set; } = true;
+
+    /// <summary>
+    /// Suffix for the single-instance mutex and show-event names: empty for the default location
+    /// (SnipDo's launcher relies on the plain names), a short stable hash for custom directories so
+    /// two portable copies can run side by side.
+    /// </summary>
+    public static string InstanceSuffix { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Chooses the data directory: an explicit --data-dir wins, then an exe-adjacent
+    /// portable.marker (data goes to .\data), then the default location. Call once, first thing.
+    /// </summary>
+    public static void Initialize(string? dataDirectory, string? executableDirectory = null)
+    {
+        var target = dataDirectory;
+        if (string.IsNullOrWhiteSpace(target)
+            && !string.IsNullOrWhiteSpace(executableDirectory)
+            && File.Exists(Path.Combine(executableDirectory, "portable.marker")))
+        {
+            target = Path.Combine(executableDirectory, "data");
+        }
+
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return;
+        }
+
+        DataDirectory = Path.GetFullPath(target);
+        IsDefaultLocation = false;
+        InstanceSuffix = InstanceSuffixFor(DataDirectory);
+    }
+
+    /// <summary>Stable 8-hex suffix so two copies with different folders never collide.</summary>
+    public static string InstanceSuffixFor(string directory)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(directory).ToLowerInvariant()));
+        return "." + Convert.ToHexString(bytes)[..8];
+    }
 
     public static string DatabasePath => Path.Combine(DataDirectory, "history.db");
 
@@ -36,7 +85,9 @@ public static class AppPaths
 
     private static void MigrateLegacyDataDirectory()
     {
-        if (Directory.Exists(DataDirectory) || !Directory.Exists(LegacyDataDirectory))
+        // Only the default location inherits the pre-rename folder; a custom/portable directory
+        // must start empty rather than silently stealing %LOCALAPPDATA%\Clipboard11.
+        if (!IsDefaultLocation || Directory.Exists(DataDirectory) || !Directory.Exists(LegacyDataDirectory))
         {
             return;
         }

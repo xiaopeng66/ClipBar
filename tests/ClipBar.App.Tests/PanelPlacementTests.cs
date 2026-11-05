@@ -1,4 +1,4 @@
-using ClipBar.App.Platform;
+﻿using ClipBar.App.Platform;
 
 namespace ClipBar.App.Tests;
 
@@ -80,6 +80,32 @@ public class PanelPlacementTests
         Assert.Equal((1920 - 420) / 2.0, left);
         Assert.Equal((1080 - 620) / 2.0, top);
         Assert.True(double.IsFinite(left) && double.IsFinite(top));
+    }
+
+    [Fact]
+    public void ClampInKeepsASavedPositionInsideTheWorkArea()
+    {
+        // Saved at 10,10 on a 125% monitor: the window must not sit at the very edge, but it is
+        // legal to be inside; a position beyond the right/bottom edge is pulled back.
+        var (left, top) = PanelPlacement.ClampIn(5000, 5000, 420, 620, 0, 0, 2560, 1440, 1.25);
+        Assert.Equal(2560 / 1.25 - 420, left, 3);
+        Assert.Equal(1440 / 1.25 - 620, top, 3);
+    }
+
+    [Fact]
+    public void ClampInPullsANegativePositionToTheWorkAreaOrigin()
+    {
+        var (left, top) = PanelPlacement.ClampIn(-300, -200, 420, 620, 0, 0, 1920, 1080, 1.0);
+        Assert.Equal(0, left);
+        Assert.Equal(0, top);
+    }
+
+    [Fact]
+    public void ClampInHandlesAWindowWiderThanTheWorkArea()
+    {
+        // Wider than the work area: pin to the left edge instead of producing left > right.
+        var (left, _) = PanelPlacement.ClampIn(100, 100, 5000, 620, 0, 0, 1920, 1080, 1.0);
+        Assert.Equal(0, left);
     }
 
     [Fact]

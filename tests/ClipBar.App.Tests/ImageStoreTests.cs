@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using ClipBar.App.Services;
 
 namespace ClipBar.App.Tests;
@@ -13,6 +13,125 @@ public class ImageStoreTests
         var dir = Path.Combine(Path.GetTempPath(), "clipbar-images-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    [Fact]
+    public void SaveAsCopiesTheStoredPngToTheChosenPath()
+    {
+        var dir = NewDir();
+        try
+        {
+            var source = Path.Combine(dir, HexA + ".png");
+            var target = Path.Combine(dir, "saved.png");
+            File.WriteAllBytes(source, [1, 2, 3]);
+
+            Assert.True(ImageStore.SaveAs(source, target));
+            Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(target));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAsOverwritesAnExistingTarget()
+    {
+        var dir = NewDir();
+        try
+        {
+            var source = Path.Combine(dir, HexA + ".png");
+            var target = Path.Combine(dir, "saved.png");
+            File.WriteAllBytes(source, [9]);
+            File.WriteAllBytes(target, [1, 1, 1]);
+
+            Assert.True(ImageStore.SaveAs(source, target));
+            Assert.Equal(new byte[] { 9 }, File.ReadAllBytes(target));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAsReturnsFalseForAMissingSource()
+    {
+        var dir = NewDir();
+        try
+        {
+            Assert.False(ImageStore.SaveAs(Path.Combine(dir, "gone.png"), Path.Combine(dir, "out.png")));
+            Assert.False(File.Exists(Path.Combine(dir, "out.png")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MoveToTrashAndRestoreRoundTrip()
+    {
+        var dir = NewDir();
+        try
+        {
+            var source = Path.Combine(dir, HexA + ".png");
+            File.WriteAllBytes(source, [1, 2, 3]);
+
+            var trash = ImageStore.MoveToTrash(source);
+
+            Assert.NotNull(trash);
+            Assert.False(File.Exists(source));
+            Assert.True(File.Exists(trash));
+            Assert.True(ImageStore.RestoreFromTrash(trash!, dir));
+            Assert.True(File.Exists(source));
+            Assert.False(File.Exists(trash));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SweepTrashRemovesOnlyExpiredEntries()
+    {
+        var dir = NewDir();
+        try
+        {
+            var trashDir = Path.Combine(dir, "trash");
+            Directory.CreateDirectory(trashDir);
+            var oldFile = Path.Combine(trashDir, HexA + ".png");
+            var freshFile = Path.Combine(trashDir, HexB + ".png");
+            File.WriteAllBytes(oldFile, [1]);
+            File.WriteAllBytes(freshFile, [2]);
+            File.SetLastWriteTimeUtc(oldFile, DateTime.UtcNow.AddHours(-2));
+
+            var removed = ImageStore.SweepTrash(dir, TimeSpan.FromHours(1));
+
+            Assert.Equal(1, removed);
+            Assert.False(File.Exists(oldFile));
+            Assert.True(File.Exists(freshFile));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MoveToTrashReturnsNullWithoutAFile()
+    {
+        var dir = NewDir();
+        try
+        {
+            Assert.Null(ImageStore.MoveToTrash(Path.Combine(dir, "missing.png")));
+            Assert.Null(ImageStore.MoveToTrash(null));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

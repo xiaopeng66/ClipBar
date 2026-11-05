@@ -2,6 +2,9 @@
 
 public sealed class AppSettings
 {
+    /// <summary>Settings-file format version (C2). Old files without it deserialize to this.</summary>
+    public int Version { get; set; } = 2;
+
     public string Hotkey { get; set; } = "Win+Alt+V";
 
     public int MaxItems { get; set; } = 500;
@@ -18,6 +21,24 @@ public sealed class AppSettings
     public string ImagePreview { get; set; } = "Large";
 
     public bool PasteOnClick { get; set; } = true;
+
+    /// <summary>Stay open after a paste so several clips can be pasted in a row (A3, v1.1.0).</summary>
+    public bool KeepPanelOpenAfterPaste { get; set; }
+
+    /// <summary>
+    /// Panel geometry (A5). Stored in DIPs; <see cref="HasPanelPosition"/> false means "centre on
+    /// the cursor's monitor" (the pre-v1.1.0 behaviour). A restored position is clamped to the
+    /// monitor's work area at show time.
+    /// </summary>
+    public bool HasPanelPosition { get; set; }
+
+    public int PanelLeft { get; set; }
+
+    public int PanelTop { get; set; }
+
+    public int PanelWidth { get; set; } = 420;
+
+    public int PanelHeight { get; set; } = 620;
 
     public bool StartWithWindows { get; set; }
 
@@ -38,11 +59,18 @@ public sealed class AppSettings
 
     public AppSettings Clone() => new()
     {
+        Version = Version,
         Hotkey = Hotkey,
         MaxItems = MaxItems,
         Theme = Theme,
         ImagePreview = ImagePreview,
         PasteOnClick = PasteOnClick,
+        KeepPanelOpenAfterPaste = KeepPanelOpenAfterPaste,
+        HasPanelPosition = HasPanelPosition,
+        PanelLeft = PanelLeft,
+        PanelTop = PanelTop,
+        PanelWidth = PanelWidth,
+        PanelHeight = PanelHeight,
         StartWithWindows = StartWithWindows,
         CaptureImages = CaptureImages,
         CaptureFiles = CaptureFiles,
@@ -61,8 +89,10 @@ public sealed class AppSettings
     public AppSettings Normalize()
     {
         MaxItems = Math.Clamp(MaxItems, 10, 5000);
+        PanelWidth = Math.Clamp(PanelWidth <= 0 ? 420 : PanelWidth, 360, 2000);
+        PanelHeight = Math.Clamp(PanelHeight <= 0 ? 620 : PanelHeight, 480, 1600);
         Hotkey = Hotkey?.Trim() ?? string.Empty;
-        Theme = Theme?.Trim() ?? string.Empty;
+        Theme = CanonicalTheme(Theme);
         ImagePreview = CanonicalImagePreview(ImagePreview);
         ExcludedApps ??= [];
         ExcludedApps = ExcludedApps
@@ -76,6 +106,14 @@ public sealed class AppSettings
     /// <summary>Maps any stored or typed preview value onto the three supported sizes. Legacy
     /// "Original"/"Thumbnail" map onto Large/Medium so an upgrade keeps the user's pick (G-24:
     /// one canonical mapping shared by settings, the window and the rows).</summary>
+    /// <summary>Only System/Light/Dark are real themes; anything else falls back to System (C2).</summary>
+    public static string CanonicalTheme(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "light" => "Light",
+        "dark" => "Dark",
+        _ => "System",
+    };
+
     public static string CanonicalImagePreview(string? value) => value?.Trim().ToLowerInvariant() switch
     {
         "small" => "Small",
@@ -101,6 +139,12 @@ public sealed class AppSettings
             && string.Equals(left.Theme, right.Theme, StringComparison.OrdinalIgnoreCase)
             && string.Equals(left.ImagePreview, right.ImagePreview, StringComparison.OrdinalIgnoreCase)
             && left.PasteOnClick == right.PasteOnClick
+            && left.KeepPanelOpenAfterPaste == right.KeepPanelOpenAfterPaste
+            && left.HasPanelPosition == right.HasPanelPosition
+            && left.PanelLeft == right.PanelLeft
+            && left.PanelTop == right.PanelTop
+            && left.PanelWidth == right.PanelWidth
+            && left.PanelHeight == right.PanelHeight
             && left.StartWithWindows == right.StartWithWindows
             && left.CaptureImages == right.CaptureImages
             && left.CaptureFiles == right.CaptureFiles

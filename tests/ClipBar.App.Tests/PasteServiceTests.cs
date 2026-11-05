@@ -77,6 +77,22 @@ public class PasteServiceTests
         Assert.Null(PasteService.DescribeUncopyable(Files(@"C:\a.txt", @"C:\b.txt"), NothingExists));
     }
 
+    [Theory]
+    [InlineData(false, true, true)]   // normal paste of an HTML clip keeps the formatted flavour
+    [InlineData(true, true, false)]   // "paste as plain text" drops it (A1)
+    [InlineData(false, false, false)] // no HTML to begin with
+    public void HtmlFlavourFollowsThePlainTextOnlyFlag(bool plainTextOnly, bool hasHtml, bool expected)
+    {
+        var item = new ClipItem
+        {
+            Kind = ClipKind.Text,
+            Text = "hello",
+            Html = hasHtml ? "<b>hello</b>" : null,
+        };
+
+        Assert.Equal(expected, PasteService.ShouldWriteHtml(item, plainTextOnly));
+    }
+
     [Fact]
     public void UnknownKindIsNotCopyable()
     {

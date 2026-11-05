@@ -47,6 +47,7 @@ public partial class SettingsWindow : FluentWindow
         ThemeBox.SelectedValue = copy.Theme;
         ImagePreviewBox.SelectedValue = copy.ImagePreview;
         PasteOnClickCheck.IsChecked = copy.PasteOnClick;
+        KeepPanelOpenCheck.IsChecked = copy.KeepPanelOpenAfterPaste;
         StartWithWindowsCheck.IsChecked = copy.StartWithWindows;
         CaptureImagesCheck.IsChecked = copy.CaptureImages;
         CaptureFilesCheck.IsChecked = copy.CaptureFiles;
@@ -77,6 +78,8 @@ public partial class SettingsWindow : FluentWindow
         ImagePreviewBox.SelectionChanged += OnFormEdited;
         PasteOnClickCheck.Checked += OnFormEdited;
         PasteOnClickCheck.Unchecked += OnFormEdited;
+        KeepPanelOpenCheck.Checked += OnFormEdited;
+        KeepPanelOpenCheck.Unchecked += OnFormEdited;
         StartWithWindowsCheck.Checked += OnFormEdited;
         StartWithWindowsCheck.Unchecked += OnFormEdited;
         CaptureImagesCheck.Checked += OnFormEdited;
@@ -217,7 +220,13 @@ public partial class SettingsWindow : FluentWindow
             MaxItems = maxItems,
             Theme = ThemeBox.SelectedValue as string ?? "System",
             ImagePreview = ImagePreviewBox.SelectedValue as string ?? "Large",
+            HasPanelPosition = _applied.HasPanelPosition,
+            PanelLeft = _applied.PanelLeft,
+            PanelTop = _applied.PanelTop,
+            PanelWidth = _applied.PanelWidth,
+            PanelHeight = _applied.PanelHeight,
             PasteOnClick = PasteOnClickCheck.IsChecked == true,
+            KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true,
             StartWithWindows = StartWithWindowsCheck.IsChecked == true,
             CaptureImages = CaptureImagesCheck.IsChecked == true,
             CaptureFiles = CaptureFilesCheck.IsChecked == true,
