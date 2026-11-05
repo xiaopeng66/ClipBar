@@ -46,11 +46,11 @@ public partial class TrayMenuWindow : FluentWindow
         if (width <= 0)
         {
             // Content-sized rows (the clip context menu): bounded so a long community action
-            // title cannot stretch the popup across the panel.
+            // title cannot stretch the popup across the panel. The width stays unset; ShowAt
+            // measures the content and assigns both dimensions before the first frame.
             window.Width = double.NaN;
             window.MinWidth = 176;
             window.MaxWidth = 300;
-            window.SizeToContent = SizeToContent.WidthAndHeight;
         }
 
         foreach (var entry in entries)
@@ -135,9 +135,6 @@ public partial class TrayMenuWindow : FluentWindow
     /// <param name="aboveCursor">Tray menus open above the cursor; a row context menu opens below-right.</param>
     public void ShowAt(int cursorX, int cursorY, bool aboveCursor = true)
     {
-        // Phase 1: show on the anchor's monitor so its DPI matches before measuring. The first
-        // frame is parked near the cursor, not at (0,0): origin parking made the menu flash in the
-        // top-left corner of the screen before it jumped into place.
         var monitor = NativeMethods.MonitorFromPoint(
             new NativeMethods.Point(cursorX, cursorY),
             NativeMethods.MonitorDefaultToNearest);
@@ -148,33 +145,31 @@ public partial class TrayMenuWindow : FluentWindow
         var anchorX = cursorX / scale;
         var anchorY = cursorY / scale;
 
-        // Park at the position the menu will most likely occupy, so the first frame never jumps:
-        // a dropdown opens at the pointer, a tray menu opens above-right of it.
-        Left = aboveCursor
-            ? Math.Max(work.Left + ScreenMargin, anchorX - 176)
-            : Math.Max(work.Left + ScreenMargin, Math.Min(anchorX, work.Right - 320));
-        Top = aboveCursor
-            ? Math.Max(work.Top + ScreenMargin, anchorY - 40)
-            : Math.Min(anchorY + ScreenMargin, work.Bottom - 200);
-        Show();
-        UpdateLayout();
-
-        // FluentWindow reserves a caption strip even without a TitleBar, so SizeToContent leaves
-        // ~38 DIP of blank space under the menu rows (visible as a tall white card). Lock the
-        // height to the measured content before positioning.
-        if (SizeToContent != SizeToContent.Manual && Content is FrameworkElement root)
+        // Measure the content and assign the final size *before* the first frame. Sizing after
+        // Show() painted one too-tall frame (FluentWindow's template reserves a caption strip)
+        // and then shrank it, which the user saw as the menu flickering in place.
+        if (Content is FrameworkElement root)
         {
-            var contentHeight = Math.Ceiling(root.ActualHeight);
-            if (contentHeight > 0)
+            var autoWidth = double.IsNaN(Width);
+            root.Measure(new Size(autoWidth ? MaxWidth : Width, double.PositiveInfinity));
+            var desired = root.DesiredSize;
+
+            if (autoWidth)
             {
-                SizeToContent = SizeToContent.Manual;
-                Height = contentHeight;
-                UpdateLayout();
+                Width = Math.Clamp(Math.Ceiling(desired.Width), MinWidth, MaxWidth);
+                root.Measure(new Size(Width, double.PositiveInfinity));
+                desired = root.DesiredSize;
+            }
+
+            var measuredHeight = Math.Ceiling(desired.Height);
+            if (measuredHeight > 0)
+            {
+                Height = measuredHeight;
             }
         }
 
-        var width = ActualWidth > 0 ? ActualWidth : 176;
-        var height = ActualHeight > 0 ? ActualHeight : 220;
+        var width = double.IsNaN(Width) ? 176 : Width;
+        var height = double.IsNaN(Height) ? 220 : Height;
 
         // Prefer above-right of the icon (Win11 tray behaviour), clamped to the work area.
         double left;
@@ -201,8 +196,12 @@ public partial class TrayMenuWindow : FluentWindow
             }
         }
 
+        // Position first, then show: the menu must never be visible at a provisional size or
+        // place, otherwise the move/resize itself is the flicker.
         Left = left;
         Top = top;
+        Show();
+        UpdateLayout();
 
         Topmost = true;
         ForceForeground();

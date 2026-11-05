@@ -958,10 +958,17 @@ public partial class MainWindow : FluentWindow
             : MenuGlyph(SymbolRegular.Flash24);
 
     /// <summary>Built-in menu rows use the same 16 DIP symbol treatment as package icons.</summary>
+    /// <remarks>
+    /// The explicit size keeps the menu's pre-show measurement deterministic: a SymbolIcon's
+    /// desired size before the window is loaded can fall back to zero, which would make the
+    /// content-sized menu narrower than its rows.
+    /// </remarks>
     private static UIElement MenuGlyph(SymbolRegular symbol) => new SymbolIcon
     {
         Symbol = symbol,
         FontSize = 14,
+        Width = 16,
+        Height = 16,
         Margin = new Thickness(0, 0, 8, 0),
         Foreground = ThemeBrushes.Resolve("TextFillColorSecondaryBrush", ThemeBrushes.SecondaryText),
     };

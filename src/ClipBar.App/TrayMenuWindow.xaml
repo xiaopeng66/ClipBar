@@ -6,7 +6,7 @@
                  Width="176"
                  MinWidth="0"
                  MinHeight="0"
-                 SizeToContent="Height"
+                 SizeToContent="Manual"
                  WindowStartupLocation="Manual"
                  WindowStyle="None"
                  ResizeMode="NoResize"
