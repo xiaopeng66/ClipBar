@@ -112,6 +112,40 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern IntPtr GetDesktopWindow();
 
+    // ---- Low-level mouse hook (click-outside dismissal) ------------------------------
+
+    public const int WhMouseLl = 14;
+    public const int WmLButtonDown = 0x0201;
+    public const int WmRButtonDown = 0x0204;
+    public const int WmMButtonDown = 0x0207;
+    public const int WmXButtonDown = 0x020B;
+
+    /// <summary>Raw physical-pixel coordinates of a low-level mouse event.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MsLlHookStruct
+    {
+        public int X;
+        public int Y;
+    }
+
+    public delegate IntPtr LowLevelMouseProc(int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc proc, IntPtr module, uint threadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool UnhookWindowsHookEx(IntPtr hook);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetModuleHandle(string? module);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr WindowFromPoint(Point point);
+
     [StructLayout(LayoutKind.Sequential)]
     public struct WindowRect
     {

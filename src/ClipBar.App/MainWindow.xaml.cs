@@ -71,6 +71,7 @@ public partial class MainWindow : FluentWindow
     };
 
     private int _foreignFocusTicks;
+    private OutsideClickHook? _outsideClickHook;
 
     public MainWindow(
         IClipRepository repository,
@@ -106,9 +107,20 @@ public partial class MainWindow : FluentWindow
             {
                 _foreignFocusTicks = 0;
                 _focusWatchdog.Start();
+                // Click-outside dismissal that does not depend on activation semantics (the
+                // Ditto / PowerToys Run approach): a mouse-down on any foreign window hides the
+                // panel instantly, even when that surface never takes the foreground. Menus,
+                // dialogs and keep-open pastes run with the hook parked (see isActive) and keep
+                // their own click-outside lifecycle.
+                _outsideClickHook?.Dispose();
+                _outsideClickHook = OutsideClickHook.Start(
+                    () => IsVisible && !_allowClose && !AutoHideSuppressed,
+                    DismissFromOutsideClick);
                 return;
             }
 
+            _outsideClickHook?.Dispose();
+            _outsideClickHook = null;
             _focusWatchdog.Stop();
             // Defer the geometry write off the hide path: a settings flush (fsync) here used to
             // stretch the click-away dismissal by a visible beat. Idle priority runs a moment
@@ -710,6 +722,21 @@ public partial class MainWindow : FluentWindow
             AppLog.Write("Focus watchdog: panel hidden");
             Hide();
         }
+    }
+
+    /// <summary>
+    /// Dispatcher-side half of <see cref="OutsideClickHook"/>: re-checked because the state may
+    /// have moved between the hook (mouse-down) and this callback.
+    /// </summary>
+    private void DismissFromOutsideClick()
+    {
+        if (!IsVisible || _allowClose || AutoHideSuppressed)
+        {
+            return;
+        }
+
+        AppLog.Write("Outside click: panel hidden");
+        Hide();
     }
 
     private void Window_Deactivated(object? sender, EventArgs e)
