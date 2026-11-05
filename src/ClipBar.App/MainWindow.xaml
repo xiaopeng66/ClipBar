@@ -666,9 +666,6 @@
                         <Button Content="清空"
                                 Style="{StaticResource FooterButton}"
                                 Click="Clear_Click" />
-                        <Button Content="设置"
-                                Style="{StaticResource FooterButton}"
-                                Click="Settings_Click" />
                     </StackPanel>
                 </Grid>
             </Grid>

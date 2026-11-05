@@ -36,7 +36,6 @@ public partial class SettingsWindow : FluentWindow
         ExtensionService extensions)
     {
         InitializeComponent();
-        ThemeService.RestoreBackdropsWhenLoaded(this);
         _save = save;
         _clear = clear;
         _openData = openData;

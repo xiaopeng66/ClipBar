@@ -159,6 +159,20 @@ public partial class TrayMenuWindow : FluentWindow
         Show();
         UpdateLayout();
 
+        // FluentWindow reserves a caption strip even without a TitleBar, so SizeToContent leaves
+        // ~38 DIP of blank space under the menu rows (visible as a tall white card). Lock the
+        // height to the measured content before positioning.
+        if (SizeToContent != SizeToContent.Manual && Content is FrameworkElement root)
+        {
+            var contentHeight = Math.Ceiling(root.ActualHeight);
+            if (contentHeight > 0)
+            {
+                SizeToContent = SizeToContent.Manual;
+                Height = contentHeight;
+                UpdateLayout();
+            }
+        }
+
         var width = ActualWidth > 0 ? ActualWidth : 176;
         var height = ActualHeight > 0 ? ActualHeight : 220;
 
