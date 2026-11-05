@@ -58,7 +58,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private bool _deactivatedWhileSuppressed;
     private bool _dismissCheckPending;
-    private readonly DispatcherTimer _focusWatchdog;
+
+    // Safety net for dismissal: Deactivated is the fast path, but Windows/WPF can miss the
+    // activation change after the keep-open paste hands focus back (measured: the panel was
+    // foreground, the user clicked another app, no Deactivated arrived). While the panel is
+    // visible, require our process to keep the foreground; two consecutive foreign samples
+    // at 100 ms hide it (~200 ms), which still rides out transient steals. Suppression
+    // scopes (menu, dialog, paste) suspend the check.
+    private readonly DispatcherTimer _focusWatchdog = new(DispatcherPriority.Background)
+    {
+        Interval = TimeSpan.FromMilliseconds(100),
+    };
+
     private int _foreignFocusTicks;
 
     public MainWindow(
@@ -99,21 +110,19 @@ public partial class MainWindow : FluentWindow
             }
 
             _focusWatchdog.Stop();
-            SaveGeometry();
+            // Defer the geometry write off the hide path: a settings flush (fsync) here used to
+            // stretch the click-away dismissal by a visible beat. Idle priority runs a moment
+            // later, off the critical path.
+            Dispatcher.BeginInvoke(new Action(SaveGeometry), DispatcherPriority.ApplicationIdle);
         };
 
-        // Safety net for dismissal: Deactivated is the fast path, but Windows/WPF can miss the
-        // activation change after the keep-open paste hands focus back (measured: the panel was
-        // foreground, the user clicked another app, no Deactivated arrived). While the panel is
-        // visible, require our process to keep the foreground; three consecutive foreign samples
-        // hide it. Suppression scopes (menu, dialog, paste) suspend the check.
-        _focusWatchdog = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(200),
-        };
         _focusWatchdog.Tick += (_, _) => CheckFocusWhileVisible();
         ImagePreviewMode = initial.ImagePreview;
         ViewModel.SetImagePreviewMode(ImagePreviewMode);
+        // Warm the first frame: the panel must open with its history already bound, not as an
+        // empty shell that fills in a beat later. The single-flight task created here is shared
+        // by every later ShowPanel call (hotkey, tray, --show), so nothing re-queries.
+        _ = ViewModel.EnsureInitialLoadedAsync();
         SourceInitialized += OnSourceInitialized;
         Closing += OnClosing;
         Closed += (_, _) => _isClosed = true;
@@ -144,6 +153,22 @@ public partial class MainWindow : FluentWindow
 
     public void ShowPanel(string reason = "unknown")
     {
+        // Fire-and-forget: the initial load is a single-flight Task (created in the constructor),
+        // so the second and every later call await the same completed task and stay on the fast
+        // path. The cursor is captured NOW, before any await: preloading must not make the panel
+        // open where the pointer has since moved to.
+        _ = ShowPanelCore(reason);
+    }
+
+    private async Task ShowPanelCore(string reason)
+    {
+        NativeMethods.GetCursorPos(out var cursor);
+        await ViewModel.EnsureInitialLoadedAsync().ConfigureAwait(true);
+        if (_isClosed)
+        {
+            return;
+        }
+
         if (!IsVisible)
         {
             var foreground = NativeMethods.GetForegroundWindow();
@@ -163,8 +188,8 @@ public partial class MainWindow : FluentWindow
             _deactivatedWhileSuppressed = false;
             // Place before the window is shown: showing first and moving afterwards can paint
             // one frame at the previous monitor/position, which reads as the panel ignoring the
-            // "follow the mouse" setting.
-            RestorePlacement();
+            // position setting.
+            RestorePlacement(cursor.X, cursor.Y);
             Show();
         }
 
@@ -179,33 +204,59 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// Restores the saved geometry (A5) when there is one, otherwise centres on the cursor's
-    /// monitor. A saved position is clamped to the target monitor's work area, so an unplugged
-    /// monitor or a resolution change never strands the panel off-screen.
+    /// Restores the saved geometry (Remember), centres on the cursor's monitor
+    /// (MonitorCenter) or opens next to the pointer (CursorAnchor). A saved position is clamped
+    /// to the target monitor's work area, so an unplugged monitor or a resolution change never
+    /// strands the panel off-screen.
     /// </summary>
-    private void RestorePlacement()
+    private void RestorePlacement(int cursorX, int cursorY)
     {
         var saved = _settings();
-        // Position mode is independent of size memory: "Remember" restores the saved spot,
-        // anything else centres on the monitor under the pointer every time.
-        if (!string.Equals(saved.PanelPositionMode, "Remember", StringComparison.OrdinalIgnoreCase)
-            || !saved.HasPanelPosition)
+        var mode = AppSettings.CanonicalPanelPositionMode(saved.PanelPositionMode);
+        if (mode == "Remember" && saved.HasPanelPosition)
         {
-            PlaceOnCursorMonitor();
-            return;
+            // MonitorFromPoint expects PHYSICAL screen pixels. v1.1.1+ stores physical values;
+            // older files stored DIPs, so convert with the window's current scale before choosing
+            // a monitor (F-03). Mixing the two units picked the wrong monitor near screen edges
+            // on mixed-DPI setups.
+            var scaleNow = DpiScale > 0 ? DpiScale : 1.0;
+            var point = saved.PanelPositionInPixels
+                ? new NativeMethods.Point(saved.PanelLeft, saved.PanelTop)
+                : new NativeMethods.Point(
+                    (int)Math.Round(saved.PanelLeft * scaleNow),
+                    (int)Math.Round(saved.PanelTop * scaleNow));
+            var savedMonitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MonitorDefaultToNearest);
+            var savedInfo = new NativeMethods.MonitorInfo
+            {
+                Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MonitorInfo>(),
+            };
+
+            if (savedMonitor != IntPtr.Zero && NativeMethods.GetMonitorInfo(savedMonitor, ref savedInfo))
+            {
+                var savedWork = savedInfo.Work;
+                var savedScale = NativeMethods.MonitorScale(savedMonitor);
+                var (restoredLeft, restoredTop) = PanelPlacement.ClampIn(
+                    point.X / savedScale,
+                    point.Y / savedScale,
+                    ActualWidth > 0 ? ActualWidth : Width,
+                    ActualHeight > 0 ? ActualHeight : Height,
+                    savedWork.Left,
+                    savedWork.Top,
+                    savedWork.Right - savedWork.Left,
+                    savedWork.Bottom - savedWork.Top,
+                    savedScale);
+
+                Left = restoredLeft;
+                Top = restoredTop;
+                return;
+            }
         }
 
-        // MonitorFromPoint expects PHYSICAL screen pixels. v1.1.1+ stores physical values;
-        // older files stored DIPs, so convert with the window's current scale before choosing a
-        // monitor (F-03). Mixing the two units picked the wrong monitor near screen edges on
-        // mixed-DPI setups.
-        var scaleNow = DpiScale > 0 ? DpiScale : 1.0;
-        var point = saved.PanelPositionInPixels
-            ? new NativeMethods.Point(saved.PanelLeft, saved.PanelTop)
-            : new NativeMethods.Point(
-                (int)Math.Round(saved.PanelLeft * scaleNow),
-                (int)Math.Round(saved.PanelTop * scaleNow));
-        var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MonitorDefaultToNearest);
+        // MonitorCenter and CursorAnchor both need the cursor's monitor; Remember without a
+        // usable saved spot falls back here too.
+        var monitor = NativeMethods.MonitorFromPoint(
+            new NativeMethods.Point(cursorX, cursorY),
+            NativeMethods.MonitorDefaultToNearest);
         var info = new NativeMethods.MonitorInfo
         {
             Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MonitorInfo>(),
@@ -213,22 +264,34 @@ public partial class MainWindow : FluentWindow
 
         if (monitor == IntPtr.Zero || !NativeMethods.GetMonitorInfo(monitor, ref info))
         {
-            PlaceOnCursorMonitor();
             return;
         }
 
+        // Monitor rects are physical pixels; WPF positions windows in DIPs of the target
+        // monitor's DPI. The conversion lives in PanelPlacement so the mixed-DPI arithmetic is
+        // testable.
         var work = info.Work;
-        var targetScale = NativeMethods.MonitorScale(monitor);
-        var (left, top) = PanelPlacement.ClampIn(
-            point.X / targetScale,
-            point.Y / targetScale,
-            ActualWidth > 0 ? ActualWidth : Width,
-            ActualHeight > 0 ? ActualHeight : Height,
-            work.Left,
-            work.Top,
-            work.Right - work.Left,
-            work.Bottom - work.Top,
-            targetScale);
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+        var (left, top) = mode == "CursorAnchor"
+            ? PanelPlacement.PlaceNearCursor(
+                cursorX,
+                cursorY,
+                work.Left,
+                work.Top,
+                work.Right - work.Left,
+                work.Bottom - work.Top,
+                width,
+                height,
+                NativeMethods.MonitorScale(monitor))
+            : PanelPlacement.CenterIn(
+                work.Left,
+                work.Top,
+                work.Right - work.Left,
+                work.Bottom - work.Top,
+                width,
+                height,
+                NativeMethods.MonitorScale(monitor));
 
         Left = left;
         Top = top;
@@ -246,41 +309,6 @@ public partial class MainWindow : FluentWindow
         // does not need to guess a scale; size stays in DIPs (it is the WPF Width/Height unit).
         var scale = DpiScale > 0 ? DpiScale : 1.0;
         _noteGeometry?.Invoke(Left * scale, Top * scale, ActualWidth, ActualHeight);
-    }
-
-    /// <summary>Centres the panel on the monitor under the cursor, clamped to that monitor's work area.</summary>
-    private void PlaceOnCursorMonitor()
-    {
-        if (!NativeMethods.GetCursorPos(out var cursor))
-        {
-            return;
-        }
-
-        var monitor = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MonitorDefaultToNearest);
-        var info = new NativeMethods.MonitorInfo
-        {
-            Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MonitorInfo>(),
-        };
-
-        if (monitor == IntPtr.Zero || !NativeMethods.GetMonitorInfo(monitor, ref info))
-        {
-            return;
-        }
-
-        // Monitor rects are physical pixels; WPF positions windows in DIPs of the window's own
-        // DPI. The conversion lives in PanelPlacement so the mixed-DPI arithmetic is testable.
-        var work = info.Work;
-        var (left, top) = PanelPlacement.CenterIn(
-            work.Left,
-            work.Top,
-            work.Right - work.Left,
-            work.Bottom - work.Top,
-            ActualWidth > 0 ? ActualWidth : Width,
-            ActualHeight > 0 ? ActualHeight : Height,
-            NativeMethods.MonitorScale(monitor));
-
-        Left = left;
-        Top = top;
     }
 
     public void HidePanel() => Hide();
@@ -336,37 +364,28 @@ public partial class MainWindow : FluentWindow
             new Action(() =>
             {
                 _dismissCheckPending = false;
+                if (AutoHideSuppressed)
+                {
+                    // A new scope started between the queue and this callback (menu item →
+                    // keep-open paste, option prompt): that scope's own disposal decides.
+                    return;
+                }
+
                 var deactivated = _deactivatedWhileSuppressed;
                 _deactivatedWhileSuppressed = false;
-
                 // Judge by the foreground window: a closing owned menu makes WPF mark the owner
                 // active even when the click landed on another app, so IsActive would lie here.
+                // A zero foreground counts as foreign in this callback: it only runs after the
+                // panel really lost activation, and "no window has the foreground" (desktop
+                // click, transition) means the user is not interacting with the panel.
                 var foreground = NativeMethods.GetForegroundWindow();
-                var ours = foreground == IntPtr.Zero || PidOf(foreground) == SelfProcessId;
+                var ours = foreground != IntPtr.Zero && PidOf(foreground) == SelfProcessId;
                 if (PanelDismissPolicy.ShouldDismiss(deactivated, IsVisible, _allowClose, ours))
                 {
                     Hide();
                 }
             }),
             DispatcherPriority.Input);
-    }
-
-    /// <summary>
-    /// Panel-owned modal dialogs deactivate the panel while they are up; without suppression the
-    /// panel hid itself behind the dialog and stayed hidden after the user cancelled (D-C-01).
-    /// Focus returns to the panel once the dialog closes.
-    /// </summary>
-    private bool ConfirmOwned(string message, string primary, string secondary)
-    {
-        using var scope = SuppressAutoHide();
-        try
-        {
-            return FluentMessageWindow.Confirm(this, message, primary, secondary);
-        }
-        finally
-        {
-            ForceForeground();
-        }
     }
 
     /// <summary>Window inventory for the save-dialog flash reports (positions only, no content).</summary>
@@ -682,10 +701,10 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        // Three ticks (~600 ms): long enough to ride out a transient focus steal from a toast or
-        // notification, short enough that a real click-away feels like it dismissed the panel.
+        // Three ticks at the old 200 ms cadence was ~600 ms — far too slow to read as "dismissed
+        // on click-away". Two samples at 100 ms keep the transient-steal tolerance.
         _foreignFocusTicks++;
-        if (_foreignFocusTicks >= 3)
+        if (_foreignFocusTicks >= 2)
         {
             _foreignFocusTicks = 0;
             AppLog.Write("Focus watchdog: panel hidden");
@@ -831,8 +850,10 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        var container = ItemsControl.ContainerFromElement(HistoryList, original);
-        if (container is not ListBoxItem item || item.DataContext is not ClipItemViewModel clip)
+        // Same Run-safe walk as the context menu: highlighted titles are ContentElements, which
+        // ContainerFromElement cannot always bridge (a left click on the highlight used to die
+        // the same way the right click did).
+        if (FindAncestor<ListBoxItem>(original) is not ListBoxItem item || item.DataContext is not ClipItemViewModel clip)
         {
             AppLog.Write($"History click: source={original.GetType().Name}, container=none");
             return;
@@ -851,8 +872,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void HistoryList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (e.OriginalSource is not DependencyObject source
-            || ItemsControl.ContainerFromElement(HistoryList, source) is not ListBoxItem container
+        if (e.OriginalSource is not DependencyObject source)
+        {
+            return;
+        }
+
+        // Walk to the row through ElementTree: highlighted titles are Runs (ContentElements),
+        // which ContainerFromElement cannot always bridge — right-clicking the highlighted text
+        // used to silently produce no menu.
+        if (FindAncestor<ListBoxItem>(source) is not ListBoxItem container
             || container.DataContext is not ClipItemViewModel item)
         {
             // Outside any row (group header, empty list): no menu. Keyboard invocation is handled
@@ -864,7 +892,14 @@ public partial class MainWindow : FluentWindow
         if (NativeMethods.GetCursorPos(out var cursor))
         {
             OpenClipContextMenu(item, cursor.X, cursor.Y);
+            return;
         }
+
+        // GetCursorPos can fail while the input queue is busy; fall back to the row's on-screen
+        // position instead of swallowing the right-click without a trace.
+        AppLog.Write("ContextMenu: GetCursorPos failed, falling back to the row rect");
+        var atRow = container.PointToScreen(new Point(container.ActualWidth / 2, container.ActualHeight / 2));
+        OpenClipContextMenu(item, (int)atRow.X, (int)atRow.Y);
     }
 
     /// <summary>
@@ -925,26 +960,30 @@ public partial class MainWindow : FluentWindow
 
         var lifetime = AttachMenuLifetime(menu);
 
-        // A ShowAt failure (e.g. the window cannot open) must not leak the suppression: the
-        // panel would never auto-hide again this session (G-21).
-        try
-        {
-            menu.ShowAt(anchorX, anchorY, aboveCursor: false);
-        }
-        catch
-        {
-            lifetime.Dispose();
-            try
+        // Show on the next input frame: opening synchronously inside ContextMenuOpening races
+        // the right-button-up, which can hand focus back to the owner and leave the menu visible
+        // but inactive. A ShowAt failure here must still not leak the suppression (G-21).
+        Dispatcher.BeginInvoke(
+            new Action(() =>
             {
-                menu.Close();
-            }
-            catch (Exception closeFailure)
-            {
-                AppLog.Error("Close clip menu after failed show", closeFailure);
-            }
-
-            throw;
-        }
+                try
+                {
+                    menu.ShowAt(anchorX, anchorY, aboveCursor: false);
+                }
+                catch
+                {
+                    lifetime.Dispose();
+                    try
+                    {
+                        menu.Close();
+                    }
+                    catch (Exception closeFailure)
+                    {
+                        AppLog.Error("Close clip menu after failed show", closeFailure);
+                    }
+                }
+            }),
+            DispatcherPriority.Input);
 
         return menu;
     }
@@ -1048,17 +1087,34 @@ public partial class MainWindow : FluentWindow
         menu.Owner = this;
         var lifetime = AttachMenuLifetime(menu);
 
+        // The footer button sits at the panel's bottom edge: anchor on its top-left corner and
+        // open upwards, so the menu never fights the work-area bottom.
         var anchor = (FrameworkElement)sender;
-        var bottomLeft = anchor.PointToScreen(new Point(0, anchor.ActualHeight));
-        try
-        {
-            menu.ShowAt((int)bottomLeft.X, (int)bottomLeft.Y, aboveCursor: false);
-        }
-        catch
-        {
-            lifetime.Dispose();
-            throw;
-        }
+        var topLeft = anchor.PointToScreen(new Point(0, 0));
+
+        // Same next-input-frame display as the clip menu: the button's click must finish before
+        // the menu activates, or the activation can be stolen back mid-click.
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                try
+                {
+                    menu.ShowAt((int)topLeft.X, (int)topLeft.Y, aboveCursor: true);
+                }
+                catch
+                {
+                    lifetime.Dispose();
+                    try
+                    {
+                        menu.Close();
+                    }
+                    catch (Exception closeFailure)
+                    {
+                        AppLog.Error("Close source menu after failed show", closeFailure);
+                    }
+                }
+            }),
+            DispatcherPriority.Input);
     }
 
     /// <summary>A 16 DIP glyph: the package icon when it decoded, else a flash placeholder.</summary>
@@ -1177,17 +1233,6 @@ public partial class MainWindow : FluentWindow
     private void Close_Click(object sender, RoutedEventArgs e)
     {
         Hide();
-    }
-
-    private void Clear_Click(object sender, RoutedEventArgs e)
-    {
-        if (ConfirmOwned(
-                "清空所有未固定的剪贴板历史？固定项会保留。",
-                primary: "清空",
-                secondary: "取消"))
-        {
-            ViewModel.ClearCommand.Execute(null);
-        }
     }
 
     private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject

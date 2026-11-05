@@ -3,7 +3,7 @@
 public sealed class AppSettings
 {
     /// <summary>Settings-file format version (C2). Old files without it deserialize to this.</summary>
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 3;
 
     public string Hotkey { get; set; } = "Win+Alt+V";
 
@@ -33,10 +33,11 @@ public sealed class AppSettings
     public bool HasPanelPosition { get; set; }
 
     /// <summary>
-    /// Where the panel opens: "FollowCursor" centres it on the monitor under the pointer,
-    /// "Remember" restores <see cref="PanelLeft"/>/<see cref="PanelTop"/>. Size is always remembered.
+    /// Where the panel opens: "Remember" restores <see cref="PanelLeft"/>/<see cref="PanelTop"/>,
+    /// "MonitorCenter" centres it on the monitor under the pointer, "CursorAnchor" opens it next
+    /// to the pointer itself (direction chosen by free space). Size is always remembered.
     /// </summary>
-    public string PanelPositionMode { get; set; } = "FollowCursor";
+    public string PanelPositionMode { get; set; } = "MonitorCenter";
 
     /// <summary>
     /// True when <see cref="PanelLeft"/>/<see cref="PanelTop"/> are physical screen pixels (v1.1.1+).
@@ -121,11 +122,17 @@ public sealed class AppSettings
     /// <summary>Maps any stored or typed preview value onto the three supported sizes. Legacy
     /// "Original"/"Thumbnail" map onto Large/Medium so an upgrade keeps the user's pick (G-24:
     /// one canonical mapping shared by settings, the window and the rows).</summary>
-    /// <summary>Only FollowCursor/Remember are real; anything else falls back to FollowCursor.</summary>
+    /// <summary>
+    /// Three real modes: Remember restores the saved spot, MonitorCenter centres on the monitor
+    /// under the pointer, CursorAnchor opens next to the pointer itself. Legacy aliases keep
+    /// their old behaviour: "memory"/"fixed" were Remember, and FollowCursor (the pre-1.2 name)
+    /// was always monitor-centre — an upgrade must not silently change it to pointer-anchoring.
+    /// </summary>
     public static string CanonicalPanelPositionMode(string? value) => value?.Trim().ToLowerInvariant() switch
     {
         "remember" or "memory" or "fixed" => "Remember",
-        _ => "FollowCursor",
+        "cursoranchor" or "nearcursor" or "cursor" => "CursorAnchor",
+        _ => "MonitorCenter",
     };
 
     /// <summary>Only System/Light/Dark are real themes; anything else falls back to System (C2).</summary>

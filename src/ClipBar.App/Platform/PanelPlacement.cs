@@ -78,4 +78,59 @@ public static class PanelPlacement
     /// <summary>A scale factor is never legitimately zero or negative; treat those as 100%.</summary>
     private static double Sanitize(double scale)
         => scale > 0 && double.IsFinite(scale) ? scale : 1.0;
+
+    /// <summary>
+    /// DIP top-left for a panel opened next to the cursor: per axis, prefer the natural reading
+    /// direction (right / below) and flip to left / above only when the panel does not fit that
+    /// way but fits on the other side. When it fits neither, keep the preferred side — the final
+    /// clamp pulls the panel back inside the work area instead of pushing it off-screen.
+    /// </summary>
+    /// <param name="cursorX">Cursor X, physical pixels (captured at the show request).</param>
+    /// <param name="cursorY">Cursor Y, physical pixels.</param>
+    /// <param name="workLeft">Work area left edge, physical pixels.</param>
+    /// <param name="workTop">Work area top edge, physical pixels.</param>
+    /// <param name="workWidth">Work area width, physical pixels.</param>
+    /// <param name="workHeight">Work area height, physical pixels.</param>
+    /// <param name="width">Panel width in DIPs.</param>
+    /// <param name="height">Panel height in DIPs.</param>
+    /// <param name="targetScale">Scale of the monitor the cursor is on.</param>
+    public static (double Left, double Top) PlaceNearCursor(
+        int cursorX,
+        int cursorY,
+        int workLeft,
+        int workTop,
+        int workWidth,
+        int workHeight,
+        double width,
+        double height,
+        double targetScale)
+    {
+        const int anchorGap = 6; // physical px between the hot pixel and the panel edge
+
+        var s = Sanitize(targetScale);
+        var physicalWidth = Math.Max(0, width) * s;
+        var physicalHeight = Math.Max(0, height) * s;
+
+        var rightSpace = workLeft + workWidth - cursorX;
+        var leftSpace = cursorX - workLeft;
+        var belowSpace = workTop + workHeight - cursorY;
+        var aboveSpace = cursorY - workTop;
+
+        // Flip only when the preferred side cannot hold the panel and the other side can; when
+        // both fit (or neither does) the natural direction wins, so the panel lands predictably.
+        var toRight = rightSpace >= physicalWidth || rightSpace >= leftSpace;
+        var below = belowSpace >= physicalHeight || belowSpace >= aboveSpace;
+
+        var leftPx = toRight ? cursorX + anchorGap : cursorX - physicalWidth - anchorGap;
+        var topPx = below ? cursorY + anchorGap : cursorY - physicalHeight - anchorGap;
+
+        // Clamp to the work area so a panel larger than the remaining space is pulled back
+        // inside instead of hanging off-screen; the origin is respected for negative-X monitors.
+        var maxLeft = Math.Max(workLeft, workLeft + workWidth - physicalWidth);
+        var maxTop = Math.Max(workTop, workTop + workHeight - physicalHeight);
+        leftPx = Math.Clamp(leftPx, workLeft, maxLeft);
+        topPx = Math.Clamp(topPx, workTop, maxTop);
+
+        return (leftPx / s, topPx / s);
+    }
 }

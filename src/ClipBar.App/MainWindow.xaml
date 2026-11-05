@@ -8,7 +8,7 @@
                  Height="620"
                  MinWidth="360"
                  MinHeight="480"
-                 WindowStartupLocation="CenterScreen"
+                 WindowStartupLocation="Manual"
                  WindowStyle="None"
                  ResizeMode="CanResize"
                  ShowInTaskbar="False"
@@ -354,9 +354,8 @@
 
                 <!-- Filters. Same horizontal inset as the header grid above (12 / 10), so the
                      first filter's border lines up with the search box's left border.
-                     One single row: the type chips plus a compact source-filter button. The old
-                     dropdown was too wide to fit next to the chips and wrapped to a second line,
-                     and a wide dropdown also clipped its own label. -->
+                     One single row of type chips: the source filter moved to the footer's right
+                     corner, and the old wide dropdown used to wrap this row on narrow windows. -->
                 <StackPanel Grid.Row="1"
                             Orientation="Horizontal"
                             Margin="12,2,10,4"
@@ -381,24 +380,6 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-
-                    <Grid Margin="8,0,0,0" VerticalAlignment="Center">
-                        <Button x:Name="SourceFilterButton"
-                                Style="{StaticResource IconButton}"
-                                Click="SourceFilter_Click"
-                                ToolTip="{Binding SelectedSource, StringFormat=来源：{0}}"
-                                AutomationProperties.Name="来源筛选">
-                            <ui:SymbolIcon Symbol="Filter24"
-                                           FontSize="16"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        </Button>
-                        <!-- Accent dot while a non-default source is selected. -->
-                        <Border Width="6" Height="6" CornerRadius="3" Margin="0,3,2,0"
-                                HorizontalAlignment="Right" VerticalAlignment="Top"
-                                Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                IsHitTestVisible="False"
-                                Visibility="{Binding IsSourceFiltered, Converter={StaticResource BoolToVisibility}}" />
-                    </Grid>
                 </StackPanel>
 
                 <!-- History -->
@@ -660,13 +641,26 @@
                                FontSize="11"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                    <StackPanel Grid.Column="2"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center">
-                        <Button Content="清空"
-                                Style="{StaticResource FooterButton}"
-                                Click="Clear_Click" />
-                    </StackPanel>
+                    <!-- Source filter moved here from the chip row: the footer's right corner is
+                         the one place for a list-wide control, and 清空 lives in 设置/托盘 only.
+                         Opens above the button (it sits at the panel's bottom edge). -->
+                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                        <Button x:Name="SourceFilterButton"
+                                Style="{StaticResource IconButton}"
+                                Click="SourceFilter_Click"
+                                ToolTip="{Binding SelectedSource, StringFormat=来源：{0}}"
+                                AutomationProperties.Name="来源筛选">
+                            <ui:SymbolIcon Symbol="Filter24"
+                                           FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Button>
+                        <!-- Accent dot while a non-default source is selected. -->
+                        <Border Width="6" Height="6" CornerRadius="3" Margin="0,3,2,0"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                IsHitTestVisible="False"
+                                Visibility="{Binding IsSourceFiltered, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
                 </Grid>
             </Grid>
         </Border>

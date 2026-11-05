@@ -22,6 +22,7 @@
                  TextOptions.TextFormattingMode="Ideal"
                  TextOptions.TextRenderingMode="ClearType"
                  UseLayoutRounding="True"
+                 SnapsToDevicePixels="True"
                  Deactivated="Window_Deactivated"
                  PreviewKeyDown="Window_PreviewKeyDown">
 
@@ -62,6 +63,16 @@
                                 </MultiTrigger.Conditions>
                                 <Setter TargetName="Bg" Property="Background"
                                         Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </MultiTrigger>
+                            <!-- Keyboard focus needs its own visible state: without it a menu-key
+                                 / Shift+F10 menu looked inert even while the window was active. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsKeyboardFocused" Value="True" />
+                                    <Condition Property="IsEnabled" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.55" />

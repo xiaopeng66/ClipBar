@@ -111,4 +111,75 @@ public class PanelPlacementTests
         Assert.Equal(-2560 + (2560 - 420) / 2.0, left);
         Assert.Equal((1440 - 620) / 2.0, top);
     }
+
+    // ---- CursorAnchor: pointer-anchored placement with per-axis flipping -----------------
+
+    [Fact]
+    public void CursorAnchorOpensDownRightWhenBothDirectionsHaveRoom()
+    {
+        var (left, top) = PanelPlacement.PlaceNearCursor(300, 300, 0, 0, 1920, 1080, 420, 620, 1.0);
+
+        Assert.Equal(306, left, 3); // cursor + 6 px gap
+        Assert.Equal(306, top, 3);
+    }
+
+    [Fact]
+    public void CursorAnchorFlipsUpWhenTheBottomCannotHoldThePanel()
+    {
+        // Cursor 80 px above the bottom edge: below cannot fit 620, above can.
+        var (left, top) = PanelPlacement.PlaceNearCursor(300, 1000, 0, 0, 1920, 1080, 420, 620, 1.0);
+
+        Assert.Equal(306, left, 3);
+        Assert.Equal(1000 - 620 - 6, top, 3);
+    }
+
+    [Fact]
+    public void CursorAnchorFlipsLeftWhenTheRightCannotHoldThePanel()
+    {
+        var (left, top) = PanelPlacement.PlaceNearCursor(1800, 300, 0, 0, 1920, 1080, 420, 620, 1.0);
+
+        Assert.Equal(1800 - 420 - 6, left, 3);
+        Assert.Equal(306, top, 3);
+    }
+
+    [Fact]
+    public void CursorAnchorFlipsBothAxesInTheBottomRightCorner()
+    {
+        var (left, top) = PanelPlacement.PlaceNearCursor(1850, 1020, 0, 0, 1920, 1080, 420, 620, 1.0);
+
+        Assert.Equal(1850 - 420 - 6, left, 3);
+        Assert.Equal(1020 - 620 - 6, top, 3);
+    }
+
+    [Fact]
+    public void CursorAnchorClampsInsideWhenThePanelIsTallerThanTheWorkArea()
+    {
+        // Neither vertical side fits (panel 620 > work 400): the flip comparison picks "above",
+        // and the clamp pulls the panel to the top edge instead of leaving it off-screen.
+        var (left, top) = PanelPlacement.PlaceNearCursor(300, 300, 0, 0, 1920, 400, 420, 620, 1.0);
+
+        Assert.Equal(306, left, 3);
+        Assert.Equal(0, top, 3);
+    }
+
+    [Fact]
+    public void CursorAnchorRespectsTheTargetMonitorScale()
+    {
+        // 200% monitor: 420x620 DIP is 840x1240 px; the result comes back in that monitor's DIPs.
+        var (left, top) = PanelPlacement.PlaceNearCursor(100, 100, 0, 0, 2160, 3840, 420, 620, 2.0);
+
+        Assert.Equal(53.0, left, 3); // (100 + 6) / 2
+        Assert.Equal(53.0, top, 3);
+    }
+
+    [Fact]
+    public void CursorAnchorRespectsANegativeOriginMonitor()
+    {
+        // The measured desk layout: portrait 200% monitor at (-2160,-787). The cursor sits near
+        // its top-left corner with room to the right and below.
+        var (left, top) = PanelPlacement.PlaceNearCursor(-2100, -700, -2160, -787, 2160, 3840, 420, 620, 2.0);
+
+        Assert.Equal((-2100 + 6) / 2.0, left, 3);
+        Assert.Equal((-700 + 6) / 2.0, top, 3);
+    }
 }

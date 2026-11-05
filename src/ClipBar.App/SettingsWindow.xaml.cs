@@ -15,6 +15,7 @@ namespace ClipBar.App;
 
 public partial class SettingsWindow : FluentWindow
 {
+    private readonly Func<AppSettings> _settings;
     private readonly Func<AppSettings, (bool Success, string Message)> _save;
     private readonly Action _clear;
     private readonly Action _openData;
@@ -29,41 +30,48 @@ public partial class SettingsWindow : FluentWindow
     private AppSettings _applied;
 
     public SettingsWindow(
-        AppSettings settings,
+        Func<AppSettings> settings,
         Func<AppSettings, (bool Success, string Message)> save,
         Action clear,
         Action openData,
         ExtensionService extensions)
     {
         InitializeComponent();
+        _settings = settings;
         _save = save;
         _clear = clear;
         _openData = openData;
         _extensions = extensions;
 
-        var copy = settings.Clone();
-        HotkeyBox.Text = copy.Hotkey;
-        MaxItemsBox.Text = copy.MaxItems.ToString();
-        ThemeBox.SelectedValue = copy.Theme;
-        ImagePreviewBox.SelectedValue = copy.ImagePreview;
-        PanelPositionBox.SelectedValue = copy.PanelPositionMode;
-        PasteOnClickCheck.IsChecked = copy.PasteOnClick;
-        KeepPanelOpenCheck.IsChecked = copy.KeepPanelOpenAfterPaste;
-        StartWithWindowsCheck.IsChecked = copy.StartWithWindows;
-        CaptureImagesCheck.IsChecked = copy.CaptureImages;
-        CaptureFilesCheck.IsChecked = copy.CaptureFiles;
-        CaptureHtmlCheck.IsChecked = copy.CaptureHtml;
-        ExcludedAppsBox.Text = string.Join(Environment.NewLine, copy.ExcludedApps);
-
+        FillForm(settings().Clone());
         ExtensionList.ItemsSource = _extensionRows;
         RefreshExtensions();
         RefreshPluginStatus();
 
         // Seeded after the form is filled and before the handlers are attached, so the initial
         // population does not count as an edit.
-        _applied = Normalize(copy);
+        _applied = Normalize(settings().Clone());
         WatchForEdits();
         UpdateApplyButton();
+    }
+
+    /// <summary>Pushes a settings snapshot onto the controls. Used by the constructor and by a
+    /// confirmed discard, which must put the applied values back before the window closes.</summary>
+    private void FillForm(AppSettings source)
+    {
+        HotkeyBox.Text = source.Hotkey;
+        MaxItemsBox.Text = source.MaxItems.ToString();
+        ThemeBox.SelectedValue = source.Theme;
+        ImagePreviewBox.SelectedValue = source.ImagePreview;
+        PanelPositionBox.SelectedValue = source.PanelPositionMode;
+        PasteOnClickCheck.IsChecked = source.PasteOnClick;
+        KeepPanelOpenCheck.IsChecked = source.KeepPanelOpenAfterPaste;
+        StartWithWindowsCheck.IsChecked = source.StartWithWindows;
+        CaptureImagesCheck.IsChecked = source.CaptureImages;
+        CaptureFilesCheck.IsChecked = source.CaptureFiles;
+        CaptureHtmlCheck.IsChecked = source.CaptureHtml;
+        ExcludedAppsBox.Text = string.Join(Environment.NewLine, source.ExcludedApps ?? []);
+        HideStatus();
     }
 
     /// <summary>
@@ -137,7 +145,14 @@ public partial class SettingsWindow : FluentWindow
         if (!close)
         {
             e.Cancel = true;
+            return;
         }
+
+        // Confirmed discard: put the applied values back on the form. The window is about to
+        // close, but App.ShowSettings re-shows a parked instance as-is, so the discarded edits
+        // must not survive on screen into that next open.
+        FillForm(_applied);
+        UpdateApplyButton();
     }
 
     /// <summary>True while the form holds unapplied edits. App.ShowPanel hides this window when
@@ -216,28 +231,37 @@ public partial class SettingsWindow : FluentWindow
             return null;
         }
 
-        return new AppSettings
-        {
-            Hotkey = HotkeyBox.Text.Trim(),
-            MaxItems = maxItems,
-            Theme = ThemeBox.SelectedValue as string ?? "System",
-            ImagePreview = ImagePreviewBox.SelectedValue as string ?? "Large",
-            PanelPositionMode = PanelPositionBox.SelectedValue as string ?? "FollowCursor",
-            HasPanelPosition = _applied.HasPanelPosition,
-            PanelLeft = _applied.PanelLeft,
-            PanelTop = _applied.PanelTop,
-            PanelWidth = _applied.PanelWidth,
-            PanelHeight = _applied.PanelHeight,
-            PasteOnClick = PasteOnClickCheck.IsChecked == true,
-            KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true,
-            StartWithWindows = StartWithWindowsCheck.IsChecked == true,
-            CaptureImages = CaptureImagesCheck.IsChecked == true,
-            CaptureFiles = CaptureFilesCheck.IsChecked == true,
-            CaptureHtml = CaptureHtmlCheck.IsChecked == true,
-            ExcludedApps = ExcludedAppsBox.Text
-                .Split(['\r', '\n', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToList(),
-        };
+        // Start from the LIVE settings, never a bare new AppSettings: fields the form does not
+        // own (panel geometry, PanelPositionInPixels, the file Version) must round-trip exactly.
+        // The old rebuild dropped PanelPositionInPixels, so a freshly opened, untouched window
+        // compared false against the live true and nagged "未应用的修改" on every close.
+        var candidate = _settings().Clone();
+
+        // Geometry is not a form field, and it moves under this window while it is open (the
+        // panel saves on hide). Align the baseline with the live values so a stale snapshot can
+        // neither fake a dirty form nor overwrite newer geometry on save.
+        _applied.HasPanelPosition = candidate.HasPanelPosition;
+        _applied.PanelPositionInPixels = candidate.PanelPositionInPixels;
+        _applied.PanelLeft = candidate.PanelLeft;
+        _applied.PanelTop = candidate.PanelTop;
+        _applied.PanelWidth = candidate.PanelWidth;
+        _applied.PanelHeight = candidate.PanelHeight;
+
+        candidate.Hotkey = HotkeyBox.Text.Trim();
+        candidate.MaxItems = maxItems;
+        candidate.Theme = ThemeBox.SelectedValue as string ?? "System";
+        candidate.ImagePreview = ImagePreviewBox.SelectedValue as string ?? "Large";
+        candidate.PanelPositionMode = PanelPositionBox.SelectedValue as string ?? "MonitorCenter";
+        candidate.PasteOnClick = PasteOnClickCheck.IsChecked == true;
+        candidate.KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true;
+        candidate.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        candidate.CaptureImages = CaptureImagesCheck.IsChecked == true;
+        candidate.CaptureFiles = CaptureFilesCheck.IsChecked == true;
+        candidate.CaptureHtml = CaptureHtmlCheck.IsChecked == true;
+        candidate.ExcludedApps = ExcludedAppsBox.Text
+            .Split(['\r', '\n', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        return candidate;
     }
 
     /// <summary>

@@ -330,11 +330,13 @@ public partial class App : Application
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            if (_mainWindow?.IsVisible == true)
+            // Refresh even while the panel is hidden: the cache must be warm so the next open
+            // shows the captured clip immediately instead of catching up on screen.
+            if (_mainWindow is { IsClosed: false } panel)
             {
                 // Guarded for the same reason as ShowPanel: a capture-triggered refresh that
                 // fails must be reported, not silently skipped.
-                _mainWindow.ViewModel.RefreshInBackground();
+                panel.ViewModel.RefreshInBackground();
             }
         }));
     }
@@ -347,14 +349,21 @@ public partial class App : Application
             return;
         }
 
-        // The panel's ShowPanel() hides this window rather than closing it, and a hidden window
-        // still holds the snapshot its form was built from. Reusing it would show stale values,
-        // so close it instead of leaving an orphan behind every time the panel pops up.
-        _settingsWindow?.Close();
-        _settingsWindow = null;
+        if (_settingsWindow is { } parked)
+        {
+            // A hidden window is parked, not dead: it may hold unapplied edits (opening the
+            // panel hides it without closing). Re-show that instance so the user finds their
+            // edits. Closing a dirty parked window here used to pop the confirm dialog while
+            // the caller went on creating a replacement — an orphaned editor plus a duplicate
+            // window. BuildCandidate reads the live settings, so the parked form can neither
+            // fake a dirty state nor overwrite geometry that changed while it was hidden.
+            parked.Show();
+            parked.Activate();
+            return;
+        }
 
         var created = new SettingsWindow(
-            _settings,
+            () => _settings,
             SaveSettings,
             ClearAllHistory,
             OpenDataFolder,

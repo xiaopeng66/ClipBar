@@ -10,7 +10,7 @@ using Wpf.Ui.Controls;
 namespace ClipBar.App;
 
 /// <summary>
-/// Fluent popup used as the tray context menu: a real Acrylic window that honours the
+/// Fluent popup used as the tray/clip context menu: a solid-surface window that honours the
 /// monitor DPI, instead of the default WPF ContextMenu popup (flat gray, blurry at 125%+).
 /// </summary>
 public partial class TrayMenuWindow : FluentWindow
@@ -204,10 +204,31 @@ public partial class TrayMenuWindow : FluentWindow
         UpdateLayout();
 
         Topmost = true;
-        ForceForeground();
 
-        // Activation completes after the first deactivation notification; ignore it.
+        // Activation must be verified, not assumed: the right-button-up that follows this call
+        // can hand focus back to the owner, leaving the menu visible but inactive (its DWM
+        // shadow fades and it ignores keys). One retry covers the race; a second failure closes
+        // the menu instead of parking a dead window on screen.
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (!ForceForeground())
+        {
+            ForceForeground();
+        }
+
         _interactive = true;
+        if (NativeMethods.GetForegroundWindow() != hwnd)
+        {
+            AppLog.Write("Menu shown but activation failed; closing instead of leaving it inert");
+            Close();
+            return;
+        }
+
+        // Keyboard focus: a menu that is foreground but has no focused row reads as inert for
+        // menu-key / Shift+F10 users. The focused row lights up via IsKeyboardFocused.
+        if (MenuPanel.Children.OfType<System.Windows.Controls.Button>().FirstOrDefault(b => b.IsEnabled) is { } first)
+        {
+            first.Focus();
+        }
     }
 
     /// <summary>Monitor work area converted to DIPs with the monitor's own scale.</summary>
@@ -242,12 +263,16 @@ public partial class TrayMenuWindow : FluentWindow
             new IntPtr(style | NativeMethods.WsExToolWindow));
     }
 
-    private void ForceForeground()
+    /// <summary>
+    /// Brings the menu to the foreground; the return value says whether it actually got there
+    /// (checked against the real foreground window, not assumed from the call not throwing).
+    /// </summary>
+    private bool ForceForeground()
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero)
         {
-            return;
+            return false;
         }
 
         var foreground = NativeMethods.GetForegroundWindow();
@@ -265,6 +290,7 @@ public partial class TrayMenuWindow : FluentWindow
         }
 
         Activate();
+        return NativeMethods.GetForegroundWindow() == hwnd;
     }
 
     /// <summary>

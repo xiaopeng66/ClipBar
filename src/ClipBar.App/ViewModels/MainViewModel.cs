@@ -234,6 +234,50 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public void RefreshInBackground() => FireAndForget(RefreshAsync());
 
+    private Task? _initialLoad;
+
+    /// <summary>True once the first history query has finished (success or handled failure).</summary>
+    public bool IsLoaded { get; private set; }
+
+    /// <summary>
+    /// Single-flight first load: startup, the hotkey, the tray and <c>--show</c> all await the
+    /// same task, so the panel's first visible frame already carries the history instead of an
+    /// empty shell that fills in a beat later. A failure still completes the gate — an
+    /// unreadable database must not keep the panel hidden forever — and goes through the same
+    /// once-per-streak reporter as <see cref="RefreshInBackground"/>.
+    /// </summary>
+    public Task EnsureInitialLoadedAsync()
+    {
+        if (_initialLoad is { } load)
+        {
+            return load;
+        }
+
+        var completion = InitialLoadAsync();
+        _initialLoad = completion;
+        return completion;
+    }
+
+    private async Task InitialLoadAsync()
+    {
+        try
+        {
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Same contract as ObserveAsync: report once per failure streak, never crash.
+            if (Interlocked.Exchange(ref _refreshFailureReported, 1) == 0)
+            {
+                _refreshFailed(ex);
+            }
+        }
+        finally
+        {
+            IsLoaded = true;
+        }
+    }
+
     private async Task ObserveAsync(Task work)
     {
         try

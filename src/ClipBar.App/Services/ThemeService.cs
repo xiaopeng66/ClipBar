@@ -206,8 +206,7 @@ public static class ThemeService
     /// </summary>
     private static void SyncSurfaceBrush()
     {
-        var resources = Application.Current?.Resources;
-        if (resources is null)
+        if (Application.Current is not { } app)
         {
             return;
         }
@@ -216,7 +215,7 @@ public static class ThemeService
             ? Color.FromRgb(0x20, 0x20, 0x20)
             : Color.FromRgb(0xF3, 0xF3, 0xF3);
 
-        if (Application.Current.TryFindResource("ApplicationBackgroundBrush") is SolidColorBrush fluent)
+        if (app.TryFindResource("ApplicationBackgroundBrush") is SolidColorBrush fluent)
         {
             // Match WPF-UI's own surface exactly when it is available.
             color = fluent.Color;
@@ -224,7 +223,7 @@ public static class ThemeService
 
         var brush = new SolidColorBrush(color);
         brush.Freeze();
-        resources["AppSurfaceBrush"] = brush;
+        app.Resources["AppSurfaceBrush"] = brush;
     }
 
     /// <summary>

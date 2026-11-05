@@ -61,6 +61,10 @@ public class AppSettingsComparisonTests
     [InlineData("Theme")]
     [InlineData("ImagePreview")]
     [InlineData("PasteOnClick")]
+    [InlineData("KeepPanelOpenAfterPaste")]
+    [InlineData("PanelWidth")]
+    [InlineData("PanelPositionInPixels")]
+    [InlineData("PanelPositionMode")]
     [InlineData("StartWithWindows")]
     [InlineData("CaptureImages")]
     [InlineData("CaptureFiles")]
@@ -111,15 +115,26 @@ public class AppSettingsComparisonTests
     [Theory]
     [InlineData("Remember", "Remember")]
     [InlineData(" remember ", "Remember")]
+    [InlineData("memory", "Remember")]
     [InlineData("fixed", "Remember")]
-    [InlineData("FollowCursor", "FollowCursor")]
-    [InlineData("cursor", "FollowCursor")]
-    [InlineData("nonsense", "FollowCursor")]
-    [InlineData(null, "FollowCursor")]
-    public void PanelPositionModeNormalisesToTheTwoSupportedValues(string? stored, string expected)
+    [InlineData("MonitorCenter", "MonitorCenter")]
+    // Legacy alias: pre-1.2 "FollowCursor" always meant monitor-centre, and an upgrade must not
+    // silently turn it into pointer-anchoring.
+    [InlineData("FollowCursor", "MonitorCenter")]
+    [InlineData("CursorAnchor", "CursorAnchor")]
+    [InlineData("cursor", "CursorAnchor")]
+    [InlineData("nonsense", "MonitorCenter")]
+    [InlineData(null, "MonitorCenter")]
+    public void PanelPositionModeNormalisesToTheThreeSupportedValues(string? stored, string expected)
     {
         var settings = new AppSettings { PanelPositionMode = stored! };
         Assert.Equal(expected, settings.Normalize().PanelPositionMode);
+    }
+
+    [Fact]
+    public void PanelPositionModeDefaultIsMonitorCentre()
+    {
+        Assert.Equal("MonitorCenter", new AppSettings().PanelPositionMode);
     }
 
     [Fact]
@@ -146,8 +161,8 @@ public class AppSettingsComparisonTests
     [Fact]
     public void VersionDefaultIsTheCurrentFormat()
     {
-        Assert.Equal(2, new AppSettings().Version);
-        Assert.Equal(2, new AppSettings().Clone().Version);
+        Assert.Equal(3, new AppSettings().Version);
+        Assert.Equal(3, new AppSettings().Clone().Version);
     }
 
     [Fact]

@@ -165,8 +165,9 @@
                                   Margin="12,0,0,0"
                                   Height="34"
                                   SelectedValuePath="Tag">
-                            <ComboBoxItem Content="跟随鼠标（居中）" Tag="FollowCursor" />
                             <ComboBoxItem Content="记住上次位置" Tag="Remember" />
+                            <ComboBoxItem Content="鼠标所在显示器居中" Tag="MonitorCenter" />
+                            <ComboBoxItem Content="跟随鼠标指针（智能展开）" Tag="CursorAnchor" />
                         </ComboBox>
                     </Grid>
                     <CheckBox x:Name="PasteOnClickCheck" Content="点击条目后自动粘贴到之前的窗口" Margin="0,0,0,8" />
