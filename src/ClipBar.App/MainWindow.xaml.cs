@@ -758,7 +758,9 @@ public partial class MainWindow : FluentWindow
         {
             ClipKind.Text => TrayMenuEntry.Item(
                 "粘贴为纯文本",
-                () => PasteItemCore(model, plainTextOnly: true),
+                // Menu rows are Actions: PasteItemCore logs its own failures, so the returned
+                // task is deliberately fire-and-forget.
+                () => { _ = PasteItemCore(model, plainTextOnly: true); },
                 icon: MenuGlyph(SymbolRegular.TextDescription24)),
             ClipKind.Image => TrayMenuEntry.Item(
                 "图片另存为…",
