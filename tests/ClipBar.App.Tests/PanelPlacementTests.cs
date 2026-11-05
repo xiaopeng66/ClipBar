@@ -17,7 +17,6 @@ public class PanelPlacementTests
         var (left, top) = PanelPlacement.CenterIn(
             0, 0, 1920, 1080,
             420, 620,
-            currentScale: 1.0,
             targetScale: 1.0);
 
         Assert.Equal((1920 - 420) / 2.0, left);
@@ -25,15 +24,13 @@ public class PanelPlacementTests
     }
 
     [Fact]
-    public void TheWindowSizeIsConvertedWithTheCurrentScaleBeforeDividingByTheTarget()
+    public void AWindowMeasuredAtAnotherScaleIsSizedForTheDestinationMonitor()
     {
-        // F-23's rule: size in physical pixels uses the *current* monitor's scale, and the
-        // result is expressed in the *target* monitor's DIPs. Both scales are applied, so a
-        // 420 DIP panel measured at 150% occupies 630 physical px when centring.
+        // F-23 regression: 420 DIP stays 420 DIP on every monitor. On a 150% target it occupies
+        // 630 physical px, no matter which scale the window was measured under before moving.
         var (left, top) = PanelPlacement.CenterIn(
             1920, 0, 2560, 1620,
             420, 620,
-            currentScale: 1.5,
             targetScale: 1.5);
 
         Assert.Equal((1920 + (2560 - 630) / 2.0) / 1.5, left);
@@ -41,22 +38,18 @@ public class PanelPlacementTests
     }
 
     [Fact]
-    public void MovingBetweenDifferentScalesAppliesEachScaleOnce()
+    public void A125To200PercentMoveStillCentresThePanel()
     {
-        // Window measured at 100% (420 physical px) placed on a 150% monitor: the physical
-        // offset is computed at 420, then expressed in that monitor's DIPs.
+        // The measured desk layout: primary 2560x1440 at 125%, portrait 2160x3840 at 200% to
+        // the left. A 420x620 DIP panel on the portrait monitor must be 840x1240 physical px and
+        // centred there, not sized with the 125% scale it came from.
         var (left, top) = PanelPlacement.CenterIn(
-            1920, 0, 2560, 1620,
+            -2160, -787, 2160, 3840,
             420, 620,
-            currentScale: 1.0,
-            targetScale: 1.5);
+            targetScale: 2.0);
 
-        Assert.Equal((1920 + (2560 - 420) / 2.0) / 1.5, left);
-        Assert.Equal(((1620 - 620) / 2.0) / 1.5, top);
-
-        // The panel must land inside the target work area, not off its right edge.
-        Assert.True(left > 1920.0 / 1.5);
-        Assert.True(left < (1920 + 2560) / 1.5);
+        Assert.Equal(-750.0, left);
+        Assert.Equal(256.5, top);
     }
 
     [Fact]
@@ -64,7 +57,7 @@ public class PanelPlacementTests
     {
         // A tiny work area (or a huge panel) must not produce a negative offset that pushes the
         // panel partly off-screen.
-        var (left, top) = PanelPlacement.CenterIn(0, 0, 300, 200, 420, 620, 1.0, 1.0);
+        var (left, top) = PanelPlacement.CenterIn(0, 0, 300, 200, 420, 620, 1.0);
 
         Assert.Equal(0.0, left);
         Assert.Equal(0.0, top);
@@ -75,7 +68,7 @@ public class PanelPlacementTests
     {
         // DpiScale is 0 before the window is first measured; dividing by it used to be a way to
         // get Infinity/NaN window coordinates.
-        var (left, top) = PanelPlacement.CenterIn(0, 0, 1920, 1080, 420, 620, 0.0, 0.0);
+        var (left, top) = PanelPlacement.CenterIn(0, 0, 1920, 1080, 420, 620, 0.0);
 
         Assert.Equal((1920 - 420) / 2.0, left);
         Assert.Equal((1080 - 620) / 2.0, top);
@@ -113,7 +106,7 @@ public class PanelPlacementTests
     {
         // A monitor at negative X (common when it is placed left of the primary) must not be
         // treated as if it started at 0.
-        var (left, top) = PanelPlacement.CenterIn(-2560, 0, 2560, 1440, 420, 620, 1.0, 1.0);
+        var (left, top) = PanelPlacement.CenterIn(-2560, 0, 2560, 1440, 420, 620, 1.0);
 
         Assert.Equal(-2560 + (2560 - 420) / 2.0, left);
         Assert.Equal((1440 - 620) / 2.0, top);

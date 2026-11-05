@@ -43,7 +43,6 @@ public partial class MainWindow : FluentWindow
     private bool _isClosed;
     private bool _hasActivatedSinceShow;
     private int _suppressAutoHideDepth;
-    private bool _userMoved;
 
     public MainWindow(
         IClipRepository repository,
@@ -128,8 +127,11 @@ public partial class MainWindow : FluentWindow
                 $"Panel open ({reason}): target={NativeMethods.GetProcessName(_previousForeground) ?? "unknown"}, "
                 + $"hwnd=0x{_previousForeground.ToInt64():X}, foregroundNow={NativeMethods.GetProcessName(foreground) ?? "unknown"}");
             _hasActivatedSinceShow = false;
-            Show();
+            // Place before the window is shown: showing first and moving afterwards can paint
+            // one frame at the previous monitor/position, which reads as the panel ignoring the
+            // "follow the mouse" setting.
             RestorePlacement();
+            Show();
         }
 
         // Guarded: this runs on every panel show, so a failed query must be reported rather than
@@ -148,11 +150,6 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void RestorePlacement()
     {
-        if (_userMoved)
-        {
-            return;
-        }
-
         var saved = _settings();
         // Position mode is independent of size memory: "Remember" restores the saved spot,
         // anything else centres on the monitor under the pointer every time.
@@ -219,8 +216,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>Centres the panel on the monitor under the cursor, clamped to that monitor's work area.</summary>
     private void PlaceOnCursorMonitor()
     {
-        // Once the user drags the panel, keep their choice for the rest of the session.
-        if (_userMoved || !NativeMethods.GetCursorPos(out var cursor))
+        if (!NativeMethods.GetCursorPos(out var cursor))
         {
             return;
         }
@@ -246,7 +242,6 @@ public partial class MainWindow : FluentWindow
             work.Bottom - work.Top,
             ActualWidth > 0 ? ActualWidth : Width,
             ActualHeight > 0 ? ActualHeight : Height,
-            DpiScale,
             NativeMethods.MonitorScale(monitor));
 
         Left = left;
@@ -1016,11 +1011,10 @@ public partial class MainWindow : FluentWindow
         {
             DragMove();
 
-            // Only a completed drag counts as a user placement. Setting this before DragMove
-            // made an aborted drag (the InvalidOperationException below) disable re-centring
-            // for the rest of the session, so the panel kept reappearing wherever it happened
-            // to be.
-            _userMoved = true;
+            // A drag only moves the panel for this session; "follow the mouse" still centres on
+            // the cursor's monitor the next time it opens, and "remember" persists the new spot
+            // through SaveGeometry. The old session-wide _userMoved pin made one click on the
+            // panel chrome silently disable follow mode until restart.
         }
         catch (InvalidOperationException)
         {

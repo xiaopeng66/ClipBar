@@ -4,12 +4,12 @@
 /// Pure placement math for the panel: centre a window on the monitor under the cursor.
 /// </summary>
 /// <remarks>
-/// Monitor work areas are physical pixels while WPF positions windows in the DIPs of the
-/// window's <em>own</em> DPI. Centring therefore has to convert the window size to physical
-/// pixels with the current scale, centre in that space, and only then divide by the target
-/// monitor's scale. Mixing the two is what made the panel drift off-centre on mixed-DPI
-/// setups (plan §5.3 T-44), and keeping this out of the window class makes that arithmetic
-/// testable without a live second monitor.
+/// Monitor work areas are physical pixels while WPF sizes windows in DIPs. DIPs are
+/// device-independent, so a 420 DIP panel is still 420 DIP on a 200% monitor — only the
+/// <em>target</em> monitor's scale converts it to the physical pixels that are centred there.
+/// Using the current monitor's scale instead (the pre-1.1.2 rule) made the panel land
+/// off-centre whenever it moved between monitors with different DPI (F-23); keeping the
+/// arithmetic here makes that measurable without a live second monitor.
 /// </remarks>
 public static class PanelPlacement
 {
@@ -21,10 +21,9 @@ public static class PanelPlacement
     /// <param name="workTop">Work area top edge, physical pixels.</param>
     /// <param name="workWidth">Work area width, physical pixels.</param>
     /// <param name="workHeight">Work area height, physical pixels.</param>
-    /// <param name="width">Window width in DIPs of the current monitor.</param>
-    /// <param name="height">Window height in DIPs of the current monitor.</param>
-    /// <param name="currentScale">Scale factor of the monitor the window is currently on.</param>
-    /// <param name="targetScale">Scale factor of the monitor the panel will move to.</param>
+    /// <param name="width">Window width in DIPs (DPI-independent).</param>
+    /// <param name="height">Window height in DIPs (DPI-independent).</param>
+    /// <param name="targetScale">Scale factor of the monitor the panel will appear on.</param>
     /// <summary>
     /// Clamps a saved window position so the whole window stays inside the work area (A5).
     /// Position and sizes are DIPs; the work area is physical pixels.
@@ -60,14 +59,14 @@ public static class PanelPlacement
         int workHeight,
         double width,
         double height,
-        double currentScale,
         double targetScale)
     {
-        var current = Sanitize(currentScale);
         var target = Sanitize(targetScale);
 
-        var physicalWidth = Math.Max(0, width) * current;
-        var physicalHeight = Math.Max(0, height) * current;
+        // WPF DIPs are device-independent: the same panel is 420 DIP on every monitor. Only the
+        // destination monitor's scale turns that into the physical footprint being centred.
+        var physicalWidth = Math.Max(0, width) * target;
+        var physicalHeight = Math.Max(0, height) * target;
 
         // Clamp to the work area: a window larger than the monitor would otherwise get a
         // negative offset and land partly off-screen.
