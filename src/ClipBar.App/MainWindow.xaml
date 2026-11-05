@@ -277,9 +277,12 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="56" />
-                    <RowDefinition Height="40" />
-                    <RowDefinition Height="*" />
+                    <!-- Auto: the filter chips wrap instead of being clipped when the panel shrinks. -->
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <!-- Inline undo bar (shown after a delete). -->
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="44" />
                 </Grid.RowDefinitions>
 
                 <!-- Header -->
@@ -352,66 +355,45 @@
 
                 <!-- Filters. Same horizontal inset as the header grid above (12 / 10), so the
                      first filter's border lines up with the search box's left border.
-                     A8 adds the time-window chips and the source-app dropdown; the whole strip
-                     never wraps — at narrow widths it scrolls horizontally instead, so row height
-                     stays fixed (A5 layout constraint). -->
-                <ScrollViewer Grid.Row="1"
-                              Margin="12,0,10,0"
-                              HorizontalScrollBarVisibility="Hidden"
-                              VerticalScrollBarVisibility="Disabled"
-                              PanningMode="HorizontalOnly">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <ListBox ItemsSource="{Binding Filters}"
-                                 SelectedValue="{Binding SelectedFilter, Mode=TwoWay}"
-                                 SelectedValuePath="Value"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 ItemContainerStyle="{StaticResource FilterItemStyle}"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 VerticalAlignment="Center">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Label}" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                     A WrapPanel never hides a chip: when the panel is narrow the source dropdown
+                     moves to a second line instead of being clipped off the right edge. -->
+                <WrapPanel Grid.Row="1"
+                           Margin="12,2,10,6"
+                           Orientation="Horizontal"
+                           VerticalAlignment="Center">
+                    <ListBox ItemsSource="{Binding Filters}"
+                             SelectedValue="{Binding SelectedFilter, Mode=TwoWay}"
+                             SelectedValuePath="Value"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ItemContainerStyle="{StaticResource FilterItemStyle}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                             VerticalAlignment="Center">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
 
-                        <ListBox ItemsSource="{Binding TimeFilters}"
-                                 SelectedItem="{Binding SelectedTimeFilter, Mode=TwoWay}"
-                                 Margin="6,0,0,0"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 ItemContainerStyle="{StaticResource FilterItemStyle}"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 VerticalAlignment="Center">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Label}" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-
-                        <ComboBox ItemsSource="{Binding SourceOptions}"
-                                  SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
-                                  Width="112"
-                                  Height="28"
-                                  Margin="8,0,4,0"
-                                  VerticalAlignment="Center"
-                                  AutomationProperties.Name="来源应用" />
-                    </StackPanel>
-                </ScrollViewer>
+                    <ComboBox ItemsSource="{Binding SourceOptions}"
+                              SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                              MinWidth="132"
+                              Height="34"
+                              MinHeight="34"
+                              FontSize="12"
+                              Padding="10,0"
+                              Margin="8,0,4,0"
+                              VerticalContentAlignment="Center"
+                              VerticalAlignment="Center"
+                              AutomationProperties.Name="来源应用" />
+                </WrapPanel>
 
                 <!-- History -->
                 <Grid Grid.Row="2">
@@ -445,136 +427,91 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid>
-                                    <!-- The tooltip belongs to the image, not the whole row. It
-                                         never participates in measuring or obscures a short preview. -->
-                                    <Grid MinHeight="30"
-                                          Visibility="{Binding ShowPreview, Converter={StaticResource BoolToVisibility}}">
-                                        <Border x:Name="PreviewFrame"
-                                                HorizontalAlignment="Left"
-                                                Margin="0,2,0,4"
-                                                ClipToBounds="True"
-                                                CornerRadius="8">
-                                            <Image Source="{Binding Thumbnail}"
-                                                   Stretch="Uniform"
-                                                   StretchDirection="DownOnly"
-                                                   SizeChanged="Thumbnail_SizeChanged"
-                                                   ToolTipService.InitialShowDelay="350"
-                                                   ToolTipService.ShowDuration="30000"
-                                                   RenderOptions.BitmapScalingMode="HighQuality">
-                                                <Image.ToolTip>
-                                                    <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
-                                                             Placement="Mouse" MaxWidth="300">
-                                                        <StackPanel>
-                                                            <TextBlock Text="{Binding Title}" FontSize="13"
-                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                                            <TextBlock Text="{Binding Subtitle}" Margin="0,3,0,0"
-                                                                       FontSize="11" TextWrapping="Wrap"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                        </StackPanel>
-                                                    </ToolTip>
-                                                </Image.ToolTip>
-                                                <Image.Width>
-                                                    <MultiBinding Converter="{StaticResource ThumbnailSize}" ConverterParameter="Width">
-                                                        <Binding Path="Thumbnail" />
-                                                        <Binding Path="DpiScale" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                                        <!-- Card content width, not list width: the card's
-                                                             12 DIP margin plus 8 DIP padding on each side
-                                                             are unavailable, and capping against the list
-                                                             let wide screenshots overflow the card and get
-                                                             clipped at the right edge. -->
-                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ContentPresenter}" />
-                                                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ListBox}" />
-                                                        <Binding Path="ImagePreviewMode" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                                    </MultiBinding>
-                                                </Image.Width>
-                                                <Image.Height>
-                                                    <MultiBinding Converter="{StaticResource ThumbnailSize}" ConverterParameter="Height">
-                                                        <Binding Path="Thumbnail" />
-                                                        <Binding Path="DpiScale" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=ContentPresenter}" />
-                                                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ListBox}" />
-                                                        <Binding Path="ImagePreviewMode" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                                    </MultiBinding>
-                                                </Image.Height>
-                                            </Image>
-                                        </Border>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                                        <!-- Canvas keeps action buttons out of the preview's measure,
-                                             even when the source is only a few pixels high or wide. -->
-                                        <!-- Anchored to the preview frame, not the row: in Medium
-                                             mode the image is only 160 DIP wide and left-aligned,
-                                             so row-width anchoring left the buttons floating at
-                                             the far edge of an empty row (G-15). -->
-                                        <Canvas x:Name="PreviewActions"
-                                                Width="{Binding ActualWidth, ElementName=PreviewFrame}"
-                                                HorizontalAlignment="Left"
-                                                Opacity="0"
-                                                IsHitTestVisible="False">
-                                            <Border Canvas.Right="0" Canvas.Top="2"
-                                                    Padding="2" CornerRadius="6"
-                                                    Background="{DynamicResource ApplicationBackgroundBrush}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Button Style="{StaticResource ItemActionButton}"
-                                                            ToolTip="固定" AutomationProperties.Name="固定"
-                                                            Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}">
-                                                        <ui:SymbolIcon Symbol="Pin24"
-                                                                       FontSize="14"
-                                                                       Foreground="{Binding IsPinned, Converter={StaticResource PinBrush}}" />
-                                                    </Button>
-                                                    <Button Style="{StaticResource ItemActionButton}"
-                                                            ToolTip="删除" AutomationProperties.Name="删除"
-                                                            Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}">
-                                                        <ui:SymbolIcon Symbol="Delete24"
-                                                                       FontSize="14"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    </Button>
-                                                </StackPanel>
+                                    <!-- Content column: the image preview (Large/Medium) or the
+                                         icon + text row (Small and non-image clips). Images size
+                                         against THIS column, so they can never run underneath the
+                                         action buttons. -->
+                                    <Grid x:Name="ContentColumn" Grid.Column="0">
+                                        <!-- The tooltip belongs to the image, not the whole row. -->
+                                        <Grid MinHeight="30"
+                                              Visibility="{Binding ShowPreview, Converter={StaticResource BoolToVisibility}}">
+                                            <Border x:Name="PreviewFrame"
+                                                    HorizontalAlignment="Left"
+                                                    Margin="0,2,0,4"
+                                                    ClipToBounds="True"
+                                                    CornerRadius="8">
+                                                <Image Source="{Binding Thumbnail}"
+                                                       Stretch="Uniform"
+                                                       StretchDirection="DownOnly"
+                                                       SizeChanged="Thumbnail_SizeChanged"
+                                                       ToolTipService.InitialShowDelay="350"
+                                                       ToolTipService.ShowDuration="30000"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.ToolTip>
+                                                        <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                                                 Placement="Mouse" MaxWidth="300">
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Title}" FontSize="13"
+                                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                                <TextBlock Text="{Binding Subtitle}" Margin="0,3,0,0"
+                                                                           FontSize="11" TextWrapping="Wrap"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                            </StackPanel>
+                                                        </ToolTip>
+                                                    </Image.ToolTip>
+                                                    <Image.Width>
+                                                        <MultiBinding Converter="{StaticResource ThumbnailSize}" ConverterParameter="Width">
+                                                            <Binding Path="Thumbnail" />
+                                                            <Binding Path="DpiScale" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                            <Binding Path="ActualWidth" ElementName="ContentColumn" />
+                                                            <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                                            <Binding Path="ImagePreviewMode" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                        </MultiBinding>
+                                                    </Image.Width>
+                                                    <Image.Height>
+                                                        <MultiBinding Converter="{StaticResource ThumbnailSize}" ConverterParameter="Height">
+                                                            <Binding Path="Thumbnail" />
+                                                            <Binding Path="DpiScale" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                            <Binding Path="ActualWidth" ElementName="ContentColumn" />
+                                                            <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                                            <Binding Path="ImagePreviewMode" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                        </MultiBinding>
+                                                    </Image.Height>
+                                                </Image>
                                             </Border>
-                                        </Canvas>
-                                    </Grid>
+                                        </Grid>
 
-                                    <!-- Small (and every non-image clip): the icon slot on the left
-                                         with the text row beside it, the original list layout. -->
-                                    <Grid
-                                          Visibility="{Binding ShowTextRow, Converter={StaticResource BoolToVisibility}}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <Grid VerticalAlignment="Center">
+                                        <!-- Small (and every non-image clip): icon slot on the left. -->
+                                        <Grid Visibility="{Binding ShowTextRow, Converter={StaticResource BoolToVisibility}}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Border
-                                                    Width="40"
+                                            <Border Width="40"
                                                     Height="40"
                                                     Margin="0,0,10,0"
                                                     CornerRadius="8"
                                                     Background="{DynamicResource ControlFillColorSecondaryBrush}"
                                                     VerticalAlignment="Center"
-                                                    ClipToBounds="True"
-                                                    Visibility="{Binding ShowTextRow, Converter={StaticResource BoolToVisibility}}">
+                                                    ClipToBounds="True">
                                                 <Grid>
-                                                    <ui:SymbolIcon
-                                                                   Symbol="{Binding IconSymbol}"
+                                                    <ui:SymbolIcon Symbol="{Binding IconSymbol}"
                                                                    FontSize="18"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center"
                                                                    Visibility="{Binding ShowIconSymbol, Converter={StaticResource BoolToVisibility}}" />
-                                                    <Border
-                                                            Width="40" Height="40" CornerRadius="8"
+                                                    <Border Width="40" Height="40" CornerRadius="8"
                                                             RenderOptions.BitmapScalingMode="HighQuality"
                                                             Visibility="{Binding ShowIconImage, Converter={StaticResource BoolToVisibility}}">
                                                         <Border.Background>
-                                                            <!-- Top-left aligned: a centered
-                                                             UniformToFill crop of a screenshot
-                                                             showed the uninformative middle
-                                                             sliver (G-16). -->
+                                                            <!-- Top-left aligned: a centered UniformToFill crop
+                                                                 of a screenshot showed the uninformative middle. -->
                                                             <ImageBrush ImageSource="{Binding Thumbnail}"
                                                                         Stretch="UniformToFill"
                                                                         AlignmentX="Left"
@@ -601,41 +538,31 @@
                                                            TextWrapping="NoWrap" />
                                             </StackPanel>
                                         </Grid>
-
-                                        <StackPanel Grid.Column="1"
-                                                    Orientation="Horizontal"
-                                                    VerticalAlignment="Center">
-                                            <Button Style="{StaticResource ItemActionButton}"
-                                                    ToolTip="固定" AutomationProperties.Name="固定"
-                                                    Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    CommandParameter="{Binding}">
-                                                <ui:SymbolIcon Symbol="Pin24"
-                                                               FontSize="14"
-                                                               Foreground="{Binding IsPinned, Converter={StaticResource PinBrush}}" />
-                                            </Button>
-                                            <Button Style="{StaticResource ItemActionButton}"
-                                                    ToolTip="删除" AutomationProperties.Name="删除"
-                                                    Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    CommandParameter="{Binding}">
-                                                <ui:SymbolIcon Symbol="Delete24"
-                                                               FontSize="14"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                            </Button>
-                                        </StackPanel>
                                     </Grid>
-                                </Grid>
 
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
-                                                 Value="True">
-                                        <Setter TargetName="PreviewActions" Property="Opacity" Value="1" />
-                                        <Setter TargetName="PreviewActions" Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                        <Setter TargetName="PreviewActions" Property="Opacity" Value="1" />
-                                        <Setter TargetName="PreviewActions" Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
+                                    <!-- One shared action column: pin/delete sit at the row's right
+                                         edge for every clip kind (no overlay on the image). -->
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                                        <Button Style="{StaticResource ItemActionButton}"
+                                                ToolTip="固定" AutomationProperties.Name="固定"
+                                                Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <ui:SymbolIcon Symbol="Pin24"
+                                                           FontSize="14"
+                                                           Foreground="{Binding IsPinned, Converter={StaticResource PinBrush}}" />
+                                        </Button>
+                                        <Button Style="{StaticResource ItemActionButton}"
+                                                ToolTip="删除" AutomationProperties.Name="删除"
+                                                Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <ui:SymbolIcon Symbol="Delete24"
+                                                           FontSize="14"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -666,7 +593,37 @@
 
                 <!-- Footer. Extension actions live in the per-clip right-click menu now; a bottom
                      strip competes with the left-click paste and needed a selected item first. -->
-                <Grid Grid.Row="3" Margin="12,0,10,0">
+                <!-- Inline undo bar: stays inside the panel, so confirming the undo never
+                     deactivates the panel the way the old separate toast window did. -->
+                <Border x:Name="UndoBar"
+                        Grid.Row="3"
+                        Margin="12,0,10,6"
+                        Padding="10,6"
+                        CornerRadius="8"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        Visibility="{Binding UndoVisible, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding UndoMessage}"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap" />
+                        <Button Grid.Column="1"
+                                Content="撤销"
+                                Style="{StaticResource FooterButton}"
+                                Command="{Binding UndoDeleteCommand}"
+                                AutomationProperties.Name="撤销删除" />
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="4" Margin="12,0,10,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />

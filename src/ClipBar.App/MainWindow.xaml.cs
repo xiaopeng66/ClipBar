@@ -66,14 +66,7 @@ public partial class MainWindow : FluentWindow
             PromptForAppOptions,
             ReportExtensionError,
             TargetProcessName,
-            ReportRefreshFailure,
-            (message, undo) => FluentMessageWindow.Toast(
-                message,
-                SymbolRegular.Delete24,
-                "已删除",
-                TimeSpan.FromSeconds(6),
-                actionLabel: "撤销",
-                action: undo));
+            ReportRefreshFailure);
         DataContext = ViewModel;
         var initial = settings();
         Width = initial.PanelWidth;
@@ -166,7 +159,16 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        var point = new NativeMethods.Point(saved.PanelLeft, saved.PanelTop);
+        // MonitorFromPoint expects PHYSICAL screen pixels. v1.1.1+ stores physical values;
+        // older files stored DIPs, so convert with the window's current scale before choosing a
+        // monitor (F-03). Mixing the two units picked the wrong monitor near screen edges on
+        // mixed-DPI setups.
+        var scaleNow = DpiScale > 0 ? DpiScale : 1.0;
+        var point = saved.PanelPositionInPixels
+            ? new NativeMethods.Point(saved.PanelLeft, saved.PanelTop)
+            : new NativeMethods.Point(
+                (int)Math.Round(saved.PanelLeft * scaleNow),
+                (int)Math.Round(saved.PanelTop * scaleNow));
         var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MonitorDefaultToNearest);
         var info = new NativeMethods.MonitorInfo
         {
@@ -180,16 +182,17 @@ public partial class MainWindow : FluentWindow
         }
 
         var work = info.Work;
+        var targetScale = NativeMethods.MonitorScale(monitor);
         var (left, top) = PanelPlacement.ClampIn(
-            saved.PanelLeft,
-            saved.PanelTop,
+            point.X / targetScale,
+            point.Y / targetScale,
             ActualWidth > 0 ? ActualWidth : Width,
             ActualHeight > 0 ? ActualHeight : Height,
             work.Left,
             work.Top,
             work.Right - work.Left,
             work.Bottom - work.Top,
-            NativeMethods.MonitorScale(monitor));
+            targetScale);
 
         Left = left;
         Top = top;
@@ -203,7 +206,10 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        _noteGeometry?.Invoke(Left, Top, ActualWidth, ActualHeight);
+        // Position is persisted in physical pixels so restoring on a differently-scaled monitor
+        // does not need to guess a scale; size stays in DIPs (it is the WPF Width/Height unit).
+        var scale = DpiScale > 0 ? DpiScale : 1.0;
+        _noteGeometry?.Invoke(Left * scale, Top * scale, ActualWidth, ActualHeight);
     }
 
     /// <summary>Centres the panel on the monitor under the cursor, clamped to that monitor's work area.</summary>
@@ -408,19 +414,35 @@ public partial class MainWindow : FluentWindow
             OverwritePrompt = true,
         };
 
-        if (dialog.ShowDialog(this) != true)
+        // The save dialog deactivates the panel; without the suppression the panel hides behind
+        // it and stays hidden after the dialog closes (same mechanism as the old D-C-01).
+        using var scope = SuppressAutoHide();
+        try
         {
-            return;
-        }
+            if (dialog.ShowDialog(this) != true)
+            {
+                return;
+            }
 
-        if (ImageStore.SaveAs(item.ImagePath, dialog.FileName))
+            if (ImageStore.SaveAs(item.ImagePath, dialog.FileName))
         {
             AppLog.Write("Image saved as " + dialog.FileName);
-            FluentMessageWindow.Toast("图片已保存：" + System.IO.Path.GetFileName(dialog.FileName), SymbolRegular.Checkmark24, "已保存");
+            FluentMessageWindow.Toast(
+                    "图片已保存：" + System.IO.Path.GetFileName(dialog.FileName),
+                    SymbolRegular.Checkmark24,
+                    "已保存");
+            }
+            else
+            {
+                FluentMessageWindow.Toast(
+                    "图片保存失败，目标位置可能不可写或同名文件被占用。",
+                    SymbolRegular.Warning24,
+                    "保存失败");
+            }
         }
-        else
+        finally
         {
-            FluentMessageWindow.Toast("图片保存失败，目标位置可能不可写或同名文件被占用。", SymbolRegular.Warning24, "保存失败");
+            ForceForeground();
         }
     }
 

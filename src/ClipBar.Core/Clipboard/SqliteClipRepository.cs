@@ -7,15 +7,17 @@ namespace ClipBar.Core.Clipboard;
 public sealed class SqliteClipRepository : IClipRepository
 {
     private readonly string _connectionString;
+    private readonly string _databasePath;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     /// <summary>Bump together with a new step in <see cref="MigrateAsync"/> (C1).</summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private bool _initialized;
 
     public SqliteClipRepository(string databasePath)
     {
         var fullPath = Path.GetFullPath(databasePath);
+        _databasePath = fullPath;
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         // Deliberately NOT SqliteCacheMode.Shared: shared-cache mode makes SQLite take table-
         // level locks, and a concurrent write then fails with SQLITE_LOCKED ("database table is
@@ -116,7 +118,7 @@ public sealed class SqliteClipRepository : IClipRepository
     /// Applies every pending schema step in one transaction, then stamps user_version. Each new
     /// column becomes a numbered case here; the table is never recreated, so history survives.
     /// </summary>
-    private static async Task MigrateAsync(
+    private async Task MigrateAsync(
         SqliteConnection connection,
         int fromVersion,
         CancellationToken cancellationToken)
@@ -124,15 +126,64 @@ public sealed class SqliteClipRepository : IClipRepository
         await using var transaction = (SqliteTransaction)await connection
             .BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        // v1 -> v2 (baseline): no schema change. Future steps run in ascending order:
-        // if (fromVersion < 3) { ALTER TABLE clips ADD COLUMN note TEXT; }
-        _ = fromVersion;
+        // v1 -> v2 (baseline): no schema change.
+        // v2 -> v3: the Clipboard11 -> ClipBar rename moved the data directory but left absolute
+        // image_path values pointing at the old folder, so pre-rename images silently degraded to
+        // the symbol row. Re-point any missing path at the same file name under ./images.
+        if (fromVersion < 3)
+        {
+            await RepairImagePathsAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        }
 
         await using var stamp = connection.CreateCommand();
         stamp.Transaction = transaction;
         stamp.CommandText = $"PRAGMA user_version = {CurrentSchemaVersion};";
         await stamp.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Re-points image rows whose stored path no longer exists (v3 migration).</summary>
+    private async Task RepairImagePathsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var imagesDirectory = Path.Combine(Path.GetDirectoryName(_databasePath)!, "images");
+        var repairs = new List<(string Id, string NewPath)>();
+
+        await using (var select = connection.CreateCommand())
+        {
+            select.Transaction = transaction;
+            select.CommandText = "SELECT id, image_path FROM clips WHERE image_path IS NOT NULL AND image_path <> '';";
+            await using var reader = await select.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var id = reader.GetString(0);
+                var path = reader.GetString(1);
+                if (File.Exists(path))
+                {
+                    continue;
+                }
+
+                // The file name is content-addressed, so the same name under the current images
+                // folder is the same image.
+                var candidate = Path.Combine(imagesDirectory, Path.GetFileName(path));
+                if (File.Exists(candidate))
+                {
+                    repairs.Add((id, candidate));
+                }
+            }
+        }
+
+        foreach (var (id, newPath) in repairs)
+        {
+            await using var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = "UPDATE clips SET image_path = $path WHERE id = $id;";
+            update.Parameters.AddWithValue("$path", newPath);
+            update.Parameters.AddWithValue("$id", id);
+            await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task<ClipItem> AddOrTouchAsync(ClipItem item, CancellationToken cancellationToken = default)

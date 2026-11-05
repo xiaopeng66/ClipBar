@@ -32,6 +32,12 @@ public sealed class AppSettings
     /// </summary>
     public bool HasPanelPosition { get; set; }
 
+    /// <summary>
+    /// True when <see cref="PanelLeft"/>/<see cref="PanelTop"/> are physical screen pixels (v1.1.1+).
+    /// Older files stored DIPs; the restore path converts those with the window scale.
+    /// </summary>
+    public bool PanelPositionInPixels { get; set; }
+
     public int PanelLeft { get; set; }
 
     public int PanelTop { get; set; }
@@ -67,6 +73,7 @@ public sealed class AppSettings
         PasteOnClick = PasteOnClick,
         KeepPanelOpenAfterPaste = KeepPanelOpenAfterPaste,
         HasPanelPosition = HasPanelPosition,
+        PanelPositionInPixels = PanelPositionInPixels,
         PanelLeft = PanelLeft,
         PanelTop = PanelTop,
         PanelWidth = PanelWidth,
@@ -141,6 +148,7 @@ public sealed class AppSettings
             && left.PasteOnClick == right.PasteOnClick
             && left.KeepPanelOpenAfterPaste == right.KeepPanelOpenAfterPaste
             && left.HasPanelPosition == right.HasPanelPosition
+            && left.PanelPositionInPixels == right.PanelPositionInPixels
             && left.PanelLeft == right.PanelLeft
             && left.PanelTop == right.PanelTop
             && left.PanelWidth == right.PanelWidth

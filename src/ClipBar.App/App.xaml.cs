@@ -154,6 +154,14 @@ public partial class App : Application
                 _tray.ShowBalloon("设置未能加载", warning);
             }
 
+            // A --data-dir / portable.marker directory we could not use fell back to the default;
+            // tell the user instead of silently writing somewhere else.
+            if (AppPaths.InitializationWarning is { } dataWarning)
+            {
+                AppLog.Write(dataWarning);
+                _tray.ShowBalloon("数据目录不可用", dataWarning);
+            }
+
             _hotkey = new HotkeyService();
             _hotkey.Pressed += () => ShowPanel("hotkey");
             RegisterConfiguredHotkey();
@@ -277,6 +285,7 @@ public partial class App : Application
     {
         var next = _settings.Clone();
         next.HasPanelPosition = true;
+        next.PanelPositionInPixels = true;
         next.PanelLeft = (int)Math.Round(left);
         next.PanelTop = (int)Math.Round(top);
         next.PanelWidth = (int)Math.Round(width);

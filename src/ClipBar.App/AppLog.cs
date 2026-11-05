@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 namespace ClipBar.App;
 
 public static class AppLog
@@ -31,7 +31,24 @@ public static class AppLog
         }
         catch
         {
-            // Logging must never take the app down.
+            // Logging must never take the app down — but a data directory that cannot be written
+            // (bad --data-dir, read-only volume) must not swallow the diagnostics either (F-05).
+            WriteFallback(message);
+        }
+    }
+
+    private static void WriteFallback(string message)
+    {
+        try
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "ClipBar");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(
+                Path.Combine(directory, "app.log"),
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");
+        }
+        catch
+        {
         }
     }
 

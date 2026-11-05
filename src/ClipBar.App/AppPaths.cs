@@ -33,6 +33,9 @@ public static class AppPaths
     /// </summary>
     public static string InstanceSuffix { get; private set; } = string.Empty;
 
+    /// <summary>Set when a requested data directory was unusable and the default was kept.</summary>
+    public static string? InitializationWarning { get; private set; }
+
     /// <summary>
     /// Chooses the data directory: an explicit --data-dir wins, then an exe-adjacent
     /// portable.marker (data goes to .\data), then the default location. Call once, first thing.
@@ -52,9 +55,48 @@ public static class AppPaths
             return;
         }
 
-        DataDirectory = Path.GetFullPath(target);
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(target);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            InitializationWarning = $"数据目录路径无效（{target}）：{ex.Message}，已回退到默认目录。";
+            return;
+        }
+
+        // A custom directory that cannot be created or written would otherwise fail every later
+        // step (settings, DB, log) with no diagnostics — validate it once, up front (F-05).
+        if (!TryPrepare(fullPath, out var error))
+        {
+            InitializationWarning = $"数据目录不可用（{fullPath}）：{error}，已回退到默认目录。";
+            return;
+        }
+
+        DataDirectory = fullPath;
         IsDefaultLocation = false;
         InstanceSuffix = InstanceSuffixFor(DataDirectory);
+    }
+
+    /// <summary>Creates the directory and proves it is writable with a probe file.</summary>
+    private static bool TryPrepare(string directory, out string error)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var probe = Path.Combine(directory, ".write-probe");
+            File.WriteAllText(probe, "probe");
+            File.Delete(probe);
+            error = string.Empty;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                       or ArgumentException or NotSupportedException)
+        {
+            error = ex.Message;
+            return false;
+        }
     }
 
     /// <summary>Stable 8-hex suffix so two copies with different folders never collide.</summary>

@@ -80,6 +80,7 @@ public class AppSettingsComparisonTests
             case "PasteOnClick": edited.PasteOnClick = false; break;
             case "KeepPanelOpenAfterPaste": edited.KeepPanelOpenAfterPaste = true; break;
             case "PanelWidth": edited.PanelWidth = 700; break;
+            case "PanelPositionInPixels": edited.PanelPositionInPixels = true; break;
             case "StartWithWindows": edited.StartWithWindows = true; break;
             case "CaptureImages": edited.CaptureImages = false; break;
             case "CaptureFiles": edited.CaptureFiles = false; break;

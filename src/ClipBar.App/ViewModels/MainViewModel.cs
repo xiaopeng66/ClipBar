@@ -27,7 +27,6 @@ public sealed partial class MainViewModel : ObservableObject
     private int _refreshVersion;
     private int _extensionRunning;
     private int _refreshFailureReported;
-    private readonly Action<string, Action?>? _notifyWithAction;
 
     public MainViewModel(
         IClipRepository repository,
@@ -39,8 +38,7 @@ public sealed partial class MainViewModel : ObservableObject
         Func<SnipDoAction, IReadOnlyDictionary<string, string>?> optionPrompt,
         Action<string> reportError,
         Func<string?> targetProcessName,
-        Action<Exception>? refreshFailed = null,
-        Action<string, Action?>? notifyWithAction = null)
+        Action<Exception>? refreshFailed = null)
     {
         _repository = repository;
         _settings = settings;
@@ -52,7 +50,6 @@ public sealed partial class MainViewModel : ObservableObject
         _reportError = reportError;
         _targetProcessName = targetProcessName;
         _refreshFailed = refreshFailed ?? (_ => { });
-        _notifyWithAction = notifyWithAction;
         _hotkeyText = settings().Hotkey;
 
         ItemsView = CollectionViewSource.GetDefaultView(Items);
@@ -91,29 +88,13 @@ public sealed partial class MainViewModel : ObservableObject
         new("文件", ClipFilter.Files),
     ];
 
-    /// <summary>Time window chips (A8); Days = 0 means no restriction.</summary>
-    public ObservableCollection<TimeFilterOption> TimeFilters { get; } =
-    [
-        new("全部时间", 0),
-        new("今天", 1),
-        new("7 天", 7),
-    ];
-
-    /// <summary>Source-app dropdown (A8), rebuilt from the current result set.</summary>
+    /// <summary>Source-app dropdown, rebuilt from the current result set.</summary>
     public ObservableCollection<string> SourceOptions { get; } = ["全部来源"];
-
-    [ObservableProperty]
-    private TimeFilterOption _selectedTimeFilter = new("全部时间", 0);
 
     [ObservableProperty]
     private string _selectedSource = "全部来源";
 
     private bool _updatingSources;
-
-    partial void OnSelectedTimeFilterChanged(TimeFilterOption value)
-    {
-        FireAndForget(RefreshAsync());
-    }
 
     partial void OnSelectedSourceChanged(string value)
     {
@@ -123,21 +104,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>A8: time window over the clip's local timestamp.</summary>
-    public static bool MatchesTimeFilter(long updatedAtUtcMs, int days, DateTime now)
-    {
-        if (days <= 0)
-        {
-            return true;
-        }
-
-        var time = DateTimeOffset.FromUnixTimeMilliseconds(updatedAtUtcMs).LocalDateTime;
-        return days == 1
-            ? time.Date == now.Date
-            : time >= now.AddDays(-days) && time <= now.AddDays(1);
-    }
-
-    /// <summary>A8: source-app display name, matching the subtitle's capitalisation.</summary>
+    /// <summary>Source-app display name, matching the subtitle's capitalisation.</summary>
     public static string SourceDisplayName(ClipItem item)
     {
         var name = string.IsNullOrWhiteSpace(item.SourceApp)
@@ -170,16 +137,25 @@ public sealed partial class MainViewModel : ObservableObject
         _updatingSources = true;
         try
         {
+            // Clear() pushes SelectedItem=null through the two-way binding, so the previous value
+            // must be captured first and restored afterwards — otherwise the combo box renders
+            // blank on the very first refresh (observed live, v1.1.1).
+            var previous = SelectedSource;
+
             SourceOptions.Clear();
             foreach (var name in names)
             {
                 SourceOptions.Add(name);
             }
 
-            if (!SourceOptions.Contains(SelectedSource))
+            // Keep the current selection even when the filtered result set no longer contains it
+            // (e.g. switching the type filter): silently resetting looked like the filter broke.
+            if (!string.IsNullOrWhiteSpace(previous) && !SourceOptions.Contains(previous))
             {
-                SelectedSource = "全部来源";
+                SourceOptions.Add(previous);
             }
+
+            SelectedSource = string.IsNullOrWhiteSpace(previous) ? "全部来源" : previous;
         }
         finally
         {
@@ -200,6 +176,16 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isEmpty;
+
+    /// <summary>Inline "已删除 · 撤销" bar inside the panel (replaces the separate toast window).</summary>
+    [ObservableProperty]
+    private bool _undoVisible;
+
+    [ObservableProperty]
+    private string _undoMessage = string.Empty;
+
+    private (ClipItem Snapshot, string? TrashPath)? _pendingUndo;
+    private CancellationTokenSource? _undoCts;
 
     [ObservableProperty]
     private string _countText = "0 项";
@@ -418,14 +404,12 @@ public sealed partial class MainViewModel : ObservableObject
 
         UpdateSourceOptions(results);
 
-        var now = DateTime.Now;
         var desired = new List<ClipItemViewModel>(results.Count);
         var needsReorder = false;
         foreach (var model in results)
         {
-            // A8: time/source chips filter the already-queried rows; the type filter stays in SQL.
-            if (!MatchesTimeFilter(model.UpdatedAt, SelectedTimeFilter.Days, now)
-                || !MatchesSourceFilter(model, SelectedSource))
+            // The source filter runs over the already-queried rows; the type filter stays in SQL.
+            if (!MatchesSourceFilter(model, SelectedSource))
             {
                 continue;
             }
@@ -534,25 +518,42 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         var snapshot = item.Model;
+        var title = item.Title;
+
+        // Only one pending undo at a time: deleting again finalises the previous one.
+        FinalizePendingUndo();
+
         var image = await _repository.DeleteAsync(item.Id).ConfigureAwait(true);
 
-        // A6: keep the PNG in images/trash so 撤销 can restore the row; the file is deleted only
-        // after the undo window passes.
+        // Keep the PNG in images/trash so 撤销 can restore the row; the file is deleted when the
+        // inline undo bar expires.
         var trash = ImageStore.MoveToTrash(image);
-        _notifyWithAction?.Invoke(
-            "已删除 1 条记录",
-            () => FireAndForget(UndoDeleteAsync(snapshot, trash)));
-        if (trash is not null)
-        {
-            FireAndForget(CleanupTrashAfterDelayAsync(trash, TimeSpan.FromSeconds(8)));
-        }
+        _pendingUndo = (snapshot, trash);
+        UndoMessage = $"已删除「{title}」";
+        UndoVisible = true;
+        _undoCts = new CancellationTokenSource();
+        FireAndForget(ExpireUndoAsync(_undoCts.Token));
 
         await RefreshAsync().ConfigureAwait(true);
     }
 
-    private async Task UndoDeleteAsync(ClipItem snapshot, string? trashPath)
+    /// <summary>Restores the last deleted row without leaving the panel.</summary>
+    [RelayCommand]
+    private async Task UndoDeleteAsync()
     {
-        if (trashPath is not null)
+        if (_pendingUndo is not { } pending)
+        {
+            UndoVisible = false;
+            return;
+        }
+
+        _undoCts?.Cancel();
+        _undoCts?.Dispose();
+        _undoCts = null;
+        _pendingUndo = null;
+        UndoVisible = false;
+
+        if (pending.TrashPath is { } trashPath)
         {
             // images/trash/x.png -> images/ (derived, so an isolated test workspace restores
             // into its own folder instead of the live data directory).
@@ -563,15 +564,50 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
 
-        await _repository.AddOrTouchAsync(snapshot).ConfigureAwait(true);
-        AppLog.Write("Undo delete: " + snapshot.Id);
+        await _repository.AddOrTouchAsync(pending.Snapshot).ConfigureAwait(true);
+        AppLog.Write("Undo delete: " + pending.Snapshot.Id);
         await RefreshAsync().ConfigureAwait(true);
     }
 
-    private static async Task CleanupTrashAfterDelayAsync(string trashPath, TimeSpan delay)
+    private async Task ExpireUndoAsync(CancellationToken token)
     {
-        await Task.Delay(delay).ConfigureAwait(true);
-        ImageStore.DeleteTrashEntry(trashPath);
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(6), token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (_undoCts is null || _undoCts.Token != token)
+        {
+            return;
+        }
+
+        var pending = _pendingUndo;
+        _pendingUndo = null;
+        UndoVisible = false;
+        _undoCts.Dispose();
+        _undoCts = null;
+        if (pending?.TrashPath is { } trashPath)
+        {
+            ImageStore.DeleteTrashEntry(trashPath);
+        }
+    }
+
+    /// <summary>Drops the pending undo and its trashed file (new delete, or panel closing).</summary>
+    private void FinalizePendingUndo()
+    {
+        _undoCts?.Cancel();
+        _undoCts?.Dispose();
+        _undoCts = null;
+        if (_pendingUndo?.TrashPath is { } trashPath)
+        {
+            ImageStore.DeleteTrashEntry(trashPath);
+        }
+
+        _pendingUndo = null;
     }
 
     [RelayCommand]
@@ -591,9 +627,6 @@ public sealed partial class MainViewModel : ObservableObject
 }
 
 public sealed record FilterOption(string Label, ClipFilter Value);
-
-/// <summary>Time window chip (A8): Days 0 = all, 1 = today, N = last N days.</summary>
-public sealed record TimeFilterOption(string Label, int Days);
 
 /// <summary>
 /// An extension action bound to the exact clip its menu was opened for. Executing from this

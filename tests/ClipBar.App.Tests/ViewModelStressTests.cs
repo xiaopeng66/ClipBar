@@ -247,7 +247,6 @@ public class ViewModelStressTests
         var repository = await NewRepositoryAsync(workspace);
         await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = "undo me" });
 
-        Action? undo = null;
         var vm = new MainViewModel(
             repository,
             () => new AppSettings(),
@@ -257,29 +256,64 @@ public class ViewModelStressTests
             new ExtensionActionRunner(() => IntPtr.Zero),
             _ => null,
             _ => { },
-            () => null,
-            refreshFailed: null,
-            notifyWithAction: (_, action) => undo = action);
+            () => null);
 
         await vm.RefreshAsync();
         var item = Assert.Single(vm.Items);
 
         await vm.DeleteCommand.ExecuteAsync(item);
 
+        // The undo affordance is an inline bar inside the panel (no separate toast window).
         Assert.Empty(vm.Items);
-        Assert.NotNull(undo);
+        Assert.True(vm.UndoVisible);
+        Assert.Contains("undo me", vm.UndoMessage);
 
-        undo!();
+        await vm.UndoDeleteCommand.ExecuteAsync(null);
 
-        // Undo is fire-and-forget on the UI thread; wait for the row to come back.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline && vm.Items.Count == 0)
-        {
-            await Task.Delay(50);
-        }
-
+        Assert.False(vm.UndoVisible);
         Assert.Contains(vm.Items, x => x.Model.Text == "undo me");
         Assert.Equal(1, await repository.CountAsync());
+    });
+
+    // ---- A8: the source filter keeps its value when a filter change hides that source ----
+
+    [Fact]
+    public void SourceSelectionSurvivesAFilterChangeThatHasNoMatchingRows() => RunOnUiThread(async () =>
+    {
+        var timeout = TimeSpan.FromSeconds(5);
+        _ = timeout;
+        var repository = new ImagePreviewRepository
+        {
+            Results =
+            [
+                new ClipItem { Id = "edge", Kind = ClipKind.Text, Text = "from edge", SourceApp = "msedge.exe" },
+                new ClipItem { Id = "word", Kind = ClipKind.Text, Text = "from word", SourceApp = "winword.exe" },
+            ],
+        };
+        var vm = new MainViewModel(
+            repository,
+            () => new AppSettings(),
+            _ => { },
+            () => { },
+            new ExtensionService(Path.Combine(Path.GetTempPath(), "clipbar-empty-ext-" + Guid.NewGuid().ToString("N")[..6])),
+            new ExtensionActionRunner(() => IntPtr.Zero),
+            _ => null,
+            _ => { },
+            () => null);
+
+        await vm.RefreshAsync();
+        vm.SelectedSource = "Msedge";
+        await vm.RefreshAsync();
+
+        // The new result set only contains Word rows: the selection must not silently reset.
+        repository.Results =
+        [
+            new ClipItem { Id = "word-only", Kind = ClipKind.Text, Text = "only word", SourceApp = "winword.exe" },
+        ];
+        await vm.RefreshAsync();
+
+        Assert.Equal("Msedge", vm.SelectedSource);
+        Assert.Contains("Msedge", vm.SourceOptions);
     });
 
     // ---- right-click menu: per-clip matching and captured-clip execution ----

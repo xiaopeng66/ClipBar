@@ -165,7 +165,7 @@ public sealed class SqliteClipRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task NewDatabaseGetsTheCurrentSchemaVersion()
     {
-        Assert.Equal(2, SqliteClipRepository.CurrentSchemaVersion);
+        Assert.Equal(3, SqliteClipRepository.CurrentSchemaVersion);
         Assert.Equal(SqliteClipRepository.CurrentSchemaVersion, await ReadUserVersionAsync());
     }
 
@@ -201,6 +201,44 @@ public sealed class SqliteClipRepositoryTests : IAsyncLifetime
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA user_version;";
         return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    [Fact]
+    public async Task MigrationRepointsImageRowsLeftBehindByTheDataDirectoryRename()
+    {
+        // v2 database: rows still carry absolute paths from the pre-rename folder, while the
+        // files themselves moved with the directory (content-addressed names are unchanged).
+        var imagesDirectory = Path.Combine(_directory, "images");
+        Directory.CreateDirectory(imagesDirectory);
+        var fileName = "abcdefabcdefabcdefabcdefabcdef12.png";
+        var currentPath = Path.Combine(imagesDirectory, fileName);
+        File.WriteAllBytes(currentPath, [1, 2, 3]);
+
+        var stalePath = Path.Combine(_directory, "Clipboard11", "images", fileName);
+        await _repository.AddOrTouchAsync(new ClipItem
+        {
+            Id = "stale-image",
+            Kind = ClipKind.Image,
+            ImagePath = stalePath,
+            ImageWidth = 622,
+            ImageHeight = 60,
+            Hash = "hash-stale-image",
+        });
+
+        await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA user_version = 2;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var reopened = new SqliteClipRepository(Path.Combine(_directory, "history.db"));
+        await reopened.InitializeAsync();
+
+        var item = Assert.Single(await reopened.QueryAsync(ClipFilter.All, null));
+        Assert.Equal(currentPath, item.ImagePath);
+        Assert.Equal(SqliteClipRepository.CurrentSchemaVersion, await ReadUserVersionAsync());
     }
 
     [Fact]
