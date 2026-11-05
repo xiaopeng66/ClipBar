@@ -81,6 +81,7 @@ public class AppSettingsComparisonTests
             case "KeepPanelOpenAfterPaste": edited.KeepPanelOpenAfterPaste = true; break;
             case "PanelWidth": edited.PanelWidth = 700; break;
             case "PanelPositionInPixels": edited.PanelPositionInPixels = true; break;
+            case "PanelPositionMode": edited.PanelPositionMode = "Remember"; break;
             case "StartWithWindows": edited.StartWithWindows = true; break;
             case "CaptureImages": edited.CaptureImages = false; break;
             case "CaptureFiles": edited.CaptureFiles = false; break;
@@ -105,6 +106,20 @@ public class AppSettingsComparisonTests
         var settings = new AppSettings { ImagePreview = stored };
 
         Assert.Equal(expected, settings.Normalize().ImagePreview);
+    }
+
+    [Theory]
+    [InlineData("Remember", "Remember")]
+    [InlineData(" remember ", "Remember")]
+    [InlineData("fixed", "Remember")]
+    [InlineData("FollowCursor", "FollowCursor")]
+    [InlineData("cursor", "FollowCursor")]
+    [InlineData("nonsense", "FollowCursor")]
+    [InlineData(null, "FollowCursor")]
+    public void PanelPositionModeNormalisesToTheTwoSupportedValues(string? stored, string expected)
+    {
+        var settings = new AppSettings { PanelPositionMode = stored! };
+        Assert.Equal(expected, settings.Normalize().PanelPositionMode);
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using ClipBar.App.Services;
 using ClipBar.Core.Models;
@@ -17,6 +17,7 @@ public partial class AppOptionWindow : FluentWindow
     public AppOptionWindow(SnipDoAction action, IEnumerable<SnipDoAppOption> options)
     {
         InitializeComponent();
+        ThemeService.RestoreBackdropsWhenLoaded(this);
         HintText.Text = $"{action.DisplayTitle} 需要先选择一个参数：";
 
         foreach (var option in options)

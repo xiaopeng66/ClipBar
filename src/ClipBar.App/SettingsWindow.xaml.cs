@@ -36,6 +36,7 @@ public partial class SettingsWindow : FluentWindow
         ExtensionService extensions)
     {
         InitializeComponent();
+        ThemeService.RestoreBackdropsWhenLoaded(this);
         _save = save;
         _clear = clear;
         _openData = openData;
@@ -46,6 +47,7 @@ public partial class SettingsWindow : FluentWindow
         MaxItemsBox.Text = copy.MaxItems.ToString();
         ThemeBox.SelectedValue = copy.Theme;
         ImagePreviewBox.SelectedValue = copy.ImagePreview;
+        PanelPositionBox.SelectedValue = copy.PanelPositionMode;
         PasteOnClickCheck.IsChecked = copy.PasteOnClick;
         KeepPanelOpenCheck.IsChecked = copy.KeepPanelOpenAfterPaste;
         StartWithWindowsCheck.IsChecked = copy.StartWithWindows;
@@ -76,6 +78,7 @@ public partial class SettingsWindow : FluentWindow
         ExcludedAppsBox.TextChanged += OnFormEdited;
         ThemeBox.SelectionChanged += OnFormEdited;
         ImagePreviewBox.SelectionChanged += OnFormEdited;
+        PanelPositionBox.SelectionChanged += OnFormEdited;
         PasteOnClickCheck.Checked += OnFormEdited;
         PasteOnClickCheck.Unchecked += OnFormEdited;
         KeepPanelOpenCheck.Checked += OnFormEdited;
@@ -220,6 +223,7 @@ public partial class SettingsWindow : FluentWindow
             MaxItems = maxItems,
             Theme = ThemeBox.SelectedValue as string ?? "System",
             ImagePreview = ImagePreviewBox.SelectedValue as string ?? "Large",
+            PanelPositionMode = PanelPositionBox.SelectedValue as string ?? "FollowCursor",
             HasPanelPosition = _applied.HasPanelPosition,
             PanelLeft = _applied.PanelLeft,
             PanelTop = _applied.PanelTop,

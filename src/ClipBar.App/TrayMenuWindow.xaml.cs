@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -135,13 +135,9 @@ public partial class TrayMenuWindow : FluentWindow
     /// <param name="aboveCursor">Tray menus open above the cursor; a row context menu opens below-right.</param>
     public void ShowAt(int cursorX, int cursorY, bool aboveCursor = true)
     {
-        // Phase 1: show somewhere valid, then park the window on the anchor's monitor so its DPI
-        // matches before measuring. Measuring on the source monitor gave a stale size for
-        // mixed-DPI setups — PerMonitorV2 rescales ActualWidth/Height only after the move (G-07).
-        Left = 0;
-        Top = 0;
-        Show();
-
+        // Phase 1: show on the anchor's monitor so its DPI matches before measuring. The first
+        // frame is parked near the cursor, not at (0,0): origin parking made the menu flash in the
+        // top-left corner of the screen before it jumped into place.
         var monitor = NativeMethods.MonitorFromPoint(
             new NativeMethods.Point(cursorX, cursorY),
             NativeMethods.MonitorDefaultToNearest);
@@ -152,8 +148,9 @@ public partial class TrayMenuWindow : FluentWindow
         var anchorX = cursorX / scale;
         var anchorY = cursorY / scale;
 
-        Left = work.Left + ScreenMargin;
-        Top = work.Top + ScreenMargin;
+        Left = Math.Max(work.Left + ScreenMargin, anchorX - 160);
+        Top = Math.Max(work.Top + ScreenMargin, anchorY - 40);
+        Show();
         UpdateLayout();
 
         var width = ActualWidth > 0 ? ActualWidth : 176;

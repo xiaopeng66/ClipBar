@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Interop;
 using ClipBar.App.Platform;
+using ClipBar.App.Services;
 using Wpf.Ui.Controls;
 
 namespace ClipBar.App;
@@ -16,6 +17,7 @@ public partial class FluentMessageWindow : FluentWindow
     {
         InitializeComponent();
         SourceInitialized += (_, _) => ApplyToolWindowStyle();
+        ThemeService.RestoreBackdropsWhenLoaded(this);
     }
 
     /// <summary>

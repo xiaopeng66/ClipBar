@@ -96,8 +96,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool _updatingSources;
 
+    /// <summary>True while a specific source is selected (drives the filter button's accent dot).</summary>
+    public bool IsSourceFiltered => !string.Equals(SelectedSource, "全部来源", StringComparison.Ordinal);
+
     partial void OnSelectedSourceChanged(string value)
     {
+        OnPropertyChanged(nameof(IsSourceFiltered));
         if (!_updatingSources)
         {
             FireAndForget(RefreshAsync());

@@ -277,8 +277,7 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="56" />
-                    <!-- Auto: the filter chips wrap instead of being clipped when the panel shrinks. -->
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="40" />
                     <RowDefinition Height="*" />
                     <!-- Inline undo bar (shown after a delete). -->
                     <RowDefinition Height="Auto" />
@@ -355,12 +354,13 @@
 
                 <!-- Filters. Same horizontal inset as the header grid above (12 / 10), so the
                      first filter's border lines up with the search box's left border.
-                     A WrapPanel never hides a chip: when the panel is narrow the source dropdown
-                     moves to a second line instead of being clipped off the right edge. -->
-                <WrapPanel Grid.Row="1"
-                           Margin="12,2,10,6"
-                           Orientation="Horizontal"
-                           VerticalAlignment="Center">
+                     One single row: the type chips plus a compact source-filter button. The old
+                     dropdown was too wide to fit next to the chips and wrapped to a second line,
+                     and a wide dropdown also clipped its own label. -->
+                <StackPanel Grid.Row="1"
+                            Orientation="Horizontal"
+                            Margin="12,2,10,4"
+                            VerticalAlignment="Center">
                     <ListBox ItemsSource="{Binding Filters}"
                              SelectedValue="{Binding SelectedFilter, Mode=TwoWay}"
                              SelectedValuePath="Value"
@@ -382,18 +382,24 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <ComboBox ItemsSource="{Binding SourceOptions}"
-                              SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
-                              MinWidth="132"
-                              Height="34"
-                              MinHeight="34"
-                              FontSize="12"
-                              Padding="10,0"
-                              Margin="8,0,4,0"
-                              VerticalContentAlignment="Center"
-                              VerticalAlignment="Center"
-                              AutomationProperties.Name="来源应用" />
-                </WrapPanel>
+                    <Grid Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Button x:Name="SourceFilterButton"
+                                Style="{StaticResource IconButton}"
+                                Click="SourceFilter_Click"
+                                ToolTip="{Binding SelectedSource, StringFormat=来源：{0}}"
+                                AutomationProperties.Name="来源筛选">
+                            <ui:SymbolIcon Symbol="Filter24"
+                                           FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Button>
+                        <!-- Accent dot while a non-default source is selected. -->
+                        <Border Width="6" Height="6" CornerRadius="3" Margin="0,3,2,0"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                IsHitTestVisible="False"
+                                Visibility="{Binding IsSourceFiltered, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+                </StackPanel>
 
                 <!-- History -->
                 <Grid Grid.Row="2">
@@ -597,29 +603,40 @@
                      deactivates the panel the way the old separate toast window did. -->
                 <Border x:Name="UndoBar"
                         Grid.Row="3"
-                        Margin="12,0,10,6"
-                        Padding="10,6"
+                        Margin="12,0,10,8"
+                        Padding="12,8"
                         CornerRadius="8"
-                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                        BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
                         BorderThickness="1"
                         Visibility="{Binding UndoVisible, Converter={StaticResource BoolToVisibility}}">
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding UndoMessage}"
+                        <ui:SymbolIcon Symbol="Warning24"
+                                       FontSize="16"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding UndoMessage}"
                                    VerticalAlignment="Center"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="NoWrap" />
-                        <Button Grid.Column="1"
-                                Content="撤销"
-                                Style="{StaticResource FooterButton}"
-                                Command="{Binding UndoDeleteCommand}"
-                                AutomationProperties.Name="撤销删除" />
+                        <ui:Button Grid.Column="2"
+                                   Content="撤销"
+                                   Appearance="Primary"
+                                   MinWidth="80"
+                                   Height="30"
+                                   Margin="10,0,0,0"
+                                   Command="{Binding UndoDeleteCommand}"
+                                   AutomationProperties.Name="撤销删除" />
                     </Grid>
                 </Border>
 

@@ -2,6 +2,7 @@
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using ClipBar.App.Platform;
 using ClipBar.App.Services;
 using ClipBar.App.ViewModels;
@@ -153,7 +154,10 @@ public partial class MainWindow : FluentWindow
         }
 
         var saved = _settings();
-        if (!saved.HasPanelPosition)
+        // Position mode is independent of size memory: "Remember" restores the saved spot,
+        // anything else centres on the monitor under the pointer every time.
+        if (!string.Equals(saved.PanelPositionMode, "Remember", StringComparison.OrdinalIgnoreCase)
+            || !saved.HasPanelPosition)
         {
             PlaceOnCursorMonitor();
             return;
@@ -404,12 +408,28 @@ public partial class MainWindow : FluentWindow
         var name = item.ImageWidth > 0 && item.ImageHeight > 0
             ? $"图片 {item.ImageWidth}×{item.ImageHeight}.png"
             : "图片.png";
+
+        // Open the dialog only after the menu has fully closed and the panel is idle again:
+        // doing it inside the menu click made the menu, the panel and the dialog flash over each
+        // other at different screen positions.
+        Dispatcher.BeginInvoke(
+            new Action(() => ShowSaveImageDialog(item, name)),
+            DispatcherPriority.ApplicationIdle);
+    }
+
+    private void ShowSaveImageDialog(ClipItem item, string fileName)
+    {
+        if (!IsVisible)
+        {
+            return;
+        }
+
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Title = "图片另存为",
             Filter = "PNG 图片 (*.png)|*.png",
             DefaultExt = ".png",
-            FileName = name,
+            FileName = fileName,
             AddExtension = true,
             OverwritePrompt = true,
         };
@@ -419,15 +439,16 @@ public partial class MainWindow : FluentWindow
         using var scope = SuppressAutoHide();
         try
         {
+            ForceForeground();
             if (dialog.ShowDialog(this) != true)
             {
                 return;
             }
 
-            if (ImageStore.SaveAs(item.ImagePath, dialog.FileName))
-        {
-            AppLog.Write("Image saved as " + dialog.FileName);
-            FluentMessageWindow.Toast(
+            if (ImageStore.SaveAs(item.ImagePath!, dialog.FileName))
+            {
+                AppLog.Write("Image saved as " + dialog.FileName);
+                FluentMessageWindow.Toast(
                     "图片已保存：" + System.IO.Path.GetFileName(dialog.FileName),
                     SymbolRegular.Checkmark24,
                     "已保存");
@@ -748,34 +769,7 @@ public partial class MainWindow : FluentWindow
         menu.Owner = this;
         HistoryList.SelectedItem = item;
 
-        var scope = SuppressAutoHide();
-        menu.Closed += (_, _) =>
-        {
-            scope.Dispose();
-
-            // If the menu was dismissed by activating another app, the panel's own Deactivated
-            // fired while suppression was held and no new one will arrive — the panel would
-            // float over the other app forever (G-06). Normal closes (Esc, item click) hand
-            // activation back to the owner asynchronously, so wait a moment and then hide only
-            // when a foreign window truly owns the foreground; an options prompt re-suppresses
-            // and is excluded by the suppression check.
-            Dispatcher.InvokeAsync(async () =>
-            {
-                // 80 ms: long enough for the normal Esc/click close to hand activation back to the
-                // panel, short enough that the residual is imperceptible (D-C-05).
-                await Task.Delay(80).ConfigureAwait(true);
-                if (!IsVisible || _allowClose || AutoHideSuppressed || IsActive)
-                {
-                    return;
-                }
-
-                var ownHwnd = new WindowInteropHelper(this).Handle;
-                if (NativeMethods.GetForegroundWindow() != ownHwnd)
-                {
-                    Hide();
-                }
-            });
-        };
+        var lifetime = AttachMenuLifetime(menu);
 
         // A ShowAt failure (e.g. the window cannot open) must not leak the suppression: the
         // panel would never auto-hide again this session (G-21).
@@ -785,7 +779,7 @@ public partial class MainWindow : FluentWindow
         }
         catch
         {
-            scope.Dispose();
+            lifetime.Dispose();
             try
             {
                 menu.Close();
@@ -822,6 +816,74 @@ public partial class MainWindow : FluentWindow
         }
 
         OpenClipContextMenu(item, anchor.X, anchor.Y);
+    }
+
+    /// <summary>
+    /// Keeps the panel from auto-hiding while an owned menu is open, and hides it afterwards only
+    /// when a foreign window really took the foreground (G-06). Shared by the clip menu and the
+    /// source-filter menu.
+    /// </summary>
+    private IDisposable AttachMenuLifetime(TrayMenuWindow menu)
+    {
+        var scope = SuppressAutoHide();
+        menu.Closed += (_, _) =>
+        {
+            scope.Dispose();
+
+            Dispatcher.InvokeAsync(async () =>
+            {
+                // 80 ms: long enough for the normal Esc/click close to hand activation back to the
+                // panel, short enough that the residual is imperceptible (D-C-05).
+                await Task.Delay(80).ConfigureAwait(true);
+                if (!IsVisible || _allowClose || AutoHideSuppressed || IsActive)
+                {
+                    return;
+                }
+
+                var ownHwnd = new WindowInteropHelper(this).Handle;
+                if (NativeMethods.GetForegroundWindow() != ownHwnd)
+                {
+                    Hide();
+                }
+            });
+        };
+
+        return scope;
+    }
+
+    /// <summary>Compact source filter: a funnel button with a menu instead of a wide dropdown.</summary>
+    private void SourceFilter_Click(object sender, RoutedEventArgs e)
+    {
+        var entries = new List<TrayMenuEntry>
+        {
+            TrayMenuEntry.Item("全部来源", () => ViewModel.SelectedSource = "全部来源", bold: true),
+        };
+        foreach (var source in ViewModel.SourceOptions)
+        {
+            if (source == "全部来源")
+            {
+                continue;
+            }
+
+            var value = source;
+            entries.Add(TrayMenuEntry.Item(value, () => ViewModel.SelectedSource = value));
+        }
+
+        var menu = TrayMenuWindow.Create(entries, width: 0);
+        menu.Owner = this;
+        var lifetime = AttachMenuLifetime(menu);
+
+        var anchor = (FrameworkElement)sender;
+        var bottomLeft = anchor.PointToScreen(new Point(0, anchor.ActualHeight));
+        try
+        {
+            menu.ShowAt((int)bottomLeft.X, (int)bottomLeft.Y, aboveCursor: false);
+        }
+        catch
+        {
+            lifetime.Dispose();
+            throw;
+        }
     }
 
     /// <summary>A 16 DIP glyph: the package icon when it decoded, else a flash placeholder.</summary>

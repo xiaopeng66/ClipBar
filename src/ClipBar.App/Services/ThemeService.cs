@@ -1,4 +1,5 @@
-using System.Windows;
+﻿using System.Windows;
+using System.Windows.Threading;
 using System.Windows.Media;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -101,7 +102,7 @@ public static class ThemeService
     /// Re-applies each open window's declared backdrop. Best-effort: a window that is mid-close or
     /// on a machine where the effect is unsupported simply keeps whatever it has.
     /// </summary>
-    private static void RestoreBackdrops()
+    private static void RestoreBackdrops(Window? except = null)
     {
         var windows = Application.Current?.Windows;
         if (windows is null)
@@ -111,6 +112,11 @@ public static class ThemeService
 
         foreach (Window window in windows)
         {
+            if (ReferenceEquals(window, except))
+            {
+                continue;
+            }
+
             if (window is not FluentWindow fluent
                 || fluent.WindowBackdropType == WindowBackdropType.None)
             {
@@ -127,6 +133,42 @@ public static class ThemeService
                 AppLog.Error("Restore backdrop", ex);
             }
         }
+    }
+
+    /// <summary>
+    /// WPF-UI tears down the backdrop of *every* window when a new FluentWindow is shown (its
+    /// WindowBackgroundManager re-applies the background globally). Without this, opening any
+    /// dialog left the settings window / panel painted flat white behind it. Schedule one restore
+    /// per window after it finishes loading.
+    /// </summary>
+    public static void RestoreBackdropsWhenLoaded(Window window)
+    {
+        window.Loaded += (_, _) =>
+        {
+            // The teardown can land before or after the first Loaded dispatch depending on where
+            // WPF-UI re-applies the background, so restore on a short schedule instead of once.
+            RestoreLater(window, 0);
+            RestoreLater(window, 120);
+            RestoreLater(window, 350);
+        };
+
+        window.Closed += (_, _) => RestoreBackdrops();
+    }
+
+    private static void RestoreLater(Window window, int delayMs)
+    {
+        window.Dispatcher.InvokeAsync(async () =>
+        {
+            if (delayMs > 0)
+            {
+                await Task.Delay(delayMs).ConfigureAwait(true);
+            }
+
+            if (window.IsLoaded)
+            {
+                RestoreBackdrops(window);
+            }
+        }, DispatcherPriority.Background);
     }
 
     private static void ApplyContrastOverrides(ApplicationTheme theme)

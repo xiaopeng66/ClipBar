@@ -153,6 +153,21 @@
 
                 <StackPanel Style="{StaticResource Section}">
                     <TextBlock Text="行为" Style="{StaticResource SectionTitle}" />
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="面板位置" VerticalAlignment="Center" />
+                        <ComboBox x:Name="PanelPositionBox"
+                                  Grid.Column="1"
+                                  Margin="12,0,0,0"
+                                  Height="34"
+                                  SelectedValuePath="Tag">
+                            <ComboBoxItem Content="跟随鼠标（居中）" Tag="FollowCursor" />
+                            <ComboBoxItem Content="记住上次位置" Tag="Remember" />
+                        </ComboBox>
+                    </Grid>
                     <CheckBox x:Name="PasteOnClickCheck" Content="点击条目后自动粘贴到之前的窗口" Margin="0,0,0,8" />
                     <CheckBox x:Name="KeepPanelOpenCheck" Content="粘贴后保持面板打开（便于连续粘贴）" Margin="0,0,0,8" />
                     <CheckBox x:Name="StartWithWindowsCheck" Content="开机自动启动" Margin="0,0,0,8" />

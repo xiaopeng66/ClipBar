@@ -33,6 +33,12 @@ public sealed class AppSettings
     public bool HasPanelPosition { get; set; }
 
     /// <summary>
+    /// Where the panel opens: "FollowCursor" centres it on the monitor under the pointer,
+    /// "Remember" restores <see cref="PanelLeft"/>/<see cref="PanelTop"/>. Size is always remembered.
+    /// </summary>
+    public string PanelPositionMode { get; set; } = "FollowCursor";
+
+    /// <summary>
     /// True when <see cref="PanelLeft"/>/<see cref="PanelTop"/> are physical screen pixels (v1.1.1+).
     /// Older files stored DIPs; the restore path converts those with the window scale.
     /// </summary>
@@ -73,6 +79,7 @@ public sealed class AppSettings
         PasteOnClick = PasteOnClick,
         KeepPanelOpenAfterPaste = KeepPanelOpenAfterPaste,
         HasPanelPosition = HasPanelPosition,
+        PanelPositionMode = PanelPositionMode,
         PanelPositionInPixels = PanelPositionInPixels,
         PanelLeft = PanelLeft,
         PanelTop = PanelTop,
@@ -101,6 +108,7 @@ public sealed class AppSettings
         Hotkey = Hotkey?.Trim() ?? string.Empty;
         Theme = CanonicalTheme(Theme);
         ImagePreview = CanonicalImagePreview(ImagePreview);
+        PanelPositionMode = CanonicalPanelPositionMode(PanelPositionMode);
         ExcludedApps ??= [];
         ExcludedApps = ExcludedApps
             .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -113,6 +121,13 @@ public sealed class AppSettings
     /// <summary>Maps any stored or typed preview value onto the three supported sizes. Legacy
     /// "Original"/"Thumbnail" map onto Large/Medium so an upgrade keeps the user's pick (G-24:
     /// one canonical mapping shared by settings, the window and the rows).</summary>
+    /// <summary>Only FollowCursor/Remember are real; anything else falls back to FollowCursor.</summary>
+    public static string CanonicalPanelPositionMode(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "remember" or "memory" or "fixed" => "Remember",
+        _ => "FollowCursor",
+    };
+
     /// <summary>Only System/Light/Dark are real themes; anything else falls back to System (C2).</summary>
     public static string CanonicalTheme(string? value) => value?.Trim().ToLowerInvariant() switch
     {
@@ -148,6 +163,7 @@ public sealed class AppSettings
             && left.PasteOnClick == right.PasteOnClick
             && left.KeepPanelOpenAfterPaste == right.KeepPanelOpenAfterPaste
             && left.HasPanelPosition == right.HasPanelPosition
+            && string.Equals(left.PanelPositionMode, right.PanelPositionMode, StringComparison.OrdinalIgnoreCase)
             && left.PanelPositionInPixels == right.PanelPositionInPixels
             && left.PanelLeft == right.PanelLeft
             && left.PanelTop == right.PanelTop
