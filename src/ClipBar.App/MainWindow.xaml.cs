@@ -41,8 +41,25 @@ public partial class MainWindow : FluentWindow
     private IntPtr _previousForeground;
     private bool _allowClose;
     private bool _isClosed;
-    private bool _hasActivatedSinceShow;
+    /// <summary>
+    /// True once ShowPanel has finished its show/activate sequence. Deactivated events that
+    /// arrive earlier are part of that sequence and must not hide the panel; after this point
+    /// any deactivation is a real focus loss. Activated alone is not a reliable signal: when the
+    /// window is re-shown while WPF still considers it active, Activated is never raised, and the
+    /// old flag stayed false — which silently disabled click-outside dismissal.
+    /// </summary>
+    private bool _showCompleted;
     private int _suppressAutoHideDepth;
+    /// <summary>
+    /// The panel lost activation while a suppression scope (menu, dialog, keep-open paste) was
+    /// holding it open. When the last scope ends the panel must still be active, otherwise the
+    /// user has moved on and it hides — without this, an outside click that closes a menu left
+    /// the panel behind.
+    /// </summary>
+    private bool _deactivatedWhileSuppressed;
+    private bool _dismissCheckPending;
+    private readonly DispatcherTimer _focusWatchdog;
+    private int _foreignFocusTicks;
 
     public MainWindow(
         IClipRepository repository,
@@ -74,11 +91,27 @@ public partial class MainWindow : FluentWindow
         _noteGeometry = noteGeometry;
         IsVisibleChanged += (_, _) =>
         {
-            if (!IsVisible)
+            if (IsVisible)
             {
-                SaveGeometry();
+                _foreignFocusTicks = 0;
+                _focusWatchdog.Start();
+                return;
             }
+
+            _focusWatchdog.Stop();
+            SaveGeometry();
         };
+
+        // Safety net for dismissal: Deactivated is the fast path, but Windows/WPF can miss the
+        // activation change after the keep-open paste hands focus back (measured: the panel was
+        // foreground, the user clicked another app, no Deactivated arrived). While the panel is
+        // visible, require our process to keep the foreground; three consecutive foreign samples
+        // hide it. Suppression scopes (menu, dialog, paste) suspend the check.
+        _focusWatchdog = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(200),
+        };
+        _focusWatchdog.Tick += (_, _) => CheckFocusWhileVisible();
         ImagePreviewMode = initial.ImagePreview;
         ViewModel.SetImagePreviewMode(ImagePreviewMode);
         SourceInitialized += OnSourceInitialized;
@@ -126,7 +159,8 @@ public partial class MainWindow : FluentWindow
             AppLog.Write(
                 $"Panel open ({reason}): target={NativeMethods.GetProcessName(_previousForeground) ?? "unknown"}, "
                 + $"hwnd=0x{_previousForeground.ToInt64():X}, foregroundNow={NativeMethods.GetProcessName(foreground) ?? "unknown"}");
-            _hasActivatedSinceShow = false;
+            _showCompleted = false;
+            _deactivatedWhileSuppressed = false;
             // Place before the window is shown: showing first and moving afterwards can paint
             // one frame at the previous monitor/position, which reads as the panel ignoring the
             // "follow the mouse" setting.
@@ -139,6 +173,7 @@ public partial class MainWindow : FluentWindow
         ViewModel.RefreshInBackground();
         Topmost = true;
         ForceForeground();
+        _showCompleted = true;
         SearchBox.Focus();
         SearchBox.SelectAll();
     }
@@ -270,11 +305,50 @@ public partial class MainWindow : FluentWindow
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
-                Interlocked.Decrement(ref owner._suppressAutoHideDepth);
+                return;
+            }
+
+            if (Interlocked.Decrement(ref owner._suppressAutoHideDepth) == 0
+                && owner._deactivatedWhileSuppressed)
+            {
+                owner.ScheduleDismissAfterSuppression();
             }
         }
+    }
+
+    /// <summary>
+    /// Runs one dispatcher turn after the last suppression ends. A click inside the panel
+    /// activates it while the menu/dialog is still closing, so checking at Input priority sees
+    /// the settled state instead of the transient "menu has focus, panel has not been activated
+    /// yet" order. Still inactive means the user clicked elsewhere: dismiss the panel.
+    /// </summary>
+    private void ScheduleDismissAfterSuppression()
+    {
+        if (_dismissCheckPending)
+        {
+            return;
+        }
+
+        _dismissCheckPending = true;
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                _dismissCheckPending = false;
+                var deactivated = _deactivatedWhileSuppressed;
+                _deactivatedWhileSuppressed = false;
+
+                // Judge by the foreground window: a closing owned menu makes WPF mark the owner
+                // active even when the click landed on another app, so IsActive would lie here.
+                var foreground = NativeMethods.GetForegroundWindow();
+                var ours = foreground == IntPtr.Zero || PidOf(foreground) == SelfProcessId;
+                if (PanelDismissPolicy.ShouldDismiss(deactivated, IsVisible, _allowClose, ours))
+                {
+                    Hide();
+                }
+            }),
+            DispatcherPriority.Input);
     }
 
     /// <summary>
@@ -402,8 +476,23 @@ public partial class MainWindow : FluentWindow
             {
                 // Keep-open: hand activation back to the panel so the next click lands on it and
                 // the usual deactivate-to-hide rule still applies when the user moves on.
+                // Activating immediately after the keystroke races the target app: measured with
+                // a browser target, the browser took the foreground back after our Activate() and
+                // the panel was left visible but inactive (so no Deactivated ever arrived and
+                // click-outside did nothing). Let the target settle, then verify the hand-back.
+                var panelHwnd = new WindowInteropHelper(this).Handle;
+                await Task.Delay(150).ConfigureAwait(true);
+                for (var attempt = 0; IsVisible && !_allowClose && attempt < 4; attempt++)
+                {
+                    ForceForeground();
+                    await Task.Delay(80).ConfigureAwait(true);
+                    if (NativeMethods.GetForegroundWindow() == panelHwnd)
+                    {
+                        break;
+                    }
+                }
+
                 scope.Dispose();
-                ForceForeground();
             }
         }
     }
@@ -566,17 +655,60 @@ public partial class MainWindow : FluentWindow
         Hide();
     }
 
-    private void Window_Activated(object? sender, EventArgs e)
+    private void Window_Activated(object? sender, EventArgs e) => _showCompleted = true;
+
+    /// <summary>
+    /// Hides the panel once it has been visible for two watchdog ticks without our process
+    /// owning the foreground. Complements <see cref="Window_Deactivated"/> for the cases where
+    /// WPF never delivers the deactivation (see the timer's construction comment).
+    /// </summary>
+    private void CheckFocusWhileVisible()
     {
-        _hasActivatedSinceShow = true;
+        if (!IsVisible || _allowClose || AutoHideSuppressed)
+        {
+            _foreignFocusTicks = 0;
+            return;
+        }
+
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (foreground == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (PidOf(foreground) == SelfProcessId)
+        {
+            _foreignFocusTicks = 0;
+            return;
+        }
+
+        // Three ticks (~600 ms): long enough to ride out a transient focus steal from a toast or
+        // notification, short enough that a real click-away feels like it dismissed the panel.
+        _foreignFocusTicks++;
+        if (_foreignFocusTicks >= 3)
+        {
+            _foreignFocusTicks = 0;
+            AppLog.Write("Focus watchdog: panel hidden");
+            Hide();
+        }
     }
 
     private void Window_Deactivated(object? sender, EventArgs e)
     {
-        if (!_allowClose && !AutoHideSuppressed && _hasActivatedSinceShow)
+        if (_allowClose || !_showCompleted)
         {
-            Hide();
+            return;
         }
+
+        if (AutoHideSuppressed)
+        {
+            // A menu/dialog/keep-open paste is holding the panel. Remember the deactivation so
+            // the last scope can decide: still inactive at that point means click-outside.
+            _deactivatedWhileSuppressed = true;
+            return;
+        }
+
+        Hide();
     }
 
     private void ForceForeground()
@@ -841,8 +973,9 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// Keeps the panel from auto-hiding while an owned menu is open, and hides it afterwards only
-    /// when a foreign window really took the foreground (G-06). Shared by the clip menu and the
+    /// Keeps the panel alive while an owned menu is open. When the menu closes, Esc or an item
+    /// click hands activation back to the panel; a click outside leaves the panel inactive and
+    /// the suppression scope's deferred check then dismisses it. Shared by the clip menu and the
     /// source-filter menu.
     /// </summary>
     private IDisposable AttachMenuLifetime(TrayMenuWindow menu)
@@ -850,42 +983,31 @@ public partial class MainWindow : FluentWindow
         var scope = SuppressAutoHide();
         menu.Closed += (_, _) =>
         {
+            // Dispose first: the deferred dismiss runs at Input priority, after the activation
+            // below has settled, so this is still one coherent decision.
             scope.Dispose();
 
-            Dispatcher.InvokeAsync(async () =>
+            if (menu.ClosedByDeactivation)
             {
-                // 120 ms covers the normal Esc/click hand-back to the owner. The decision is then
-                // process-based, not hwnd-based: if any window of OURS owns the foreground (panel,
-                // a dialog, the next menu) the panel must stay. Hiding whenever the foreground was
-                // not the panel itself made a second click after right-click make the panel vanish.
-                await Task.Delay(120).ConfigureAwait(true);
-                if (!IsVisible || _allowClose || AutoHideSuppressed || IsActive)
-                {
-                    return;
-                }
-
-                // A click inside the panel dismisses the menu but must NOT take the panel with it.
-                // Windows can deliver that click to the popup only, leaving a foreign window in the
-                // foreground — so decide by where the pointer is, not only by the foreground hwnd.
-                if (CursorIsOverPanel())
+                // Measured: clicking the panel while the menu is open closes the menu without
+                // leaving the panel in the foreground — Windows hands focus back to the app that
+                // was active before the menu (a foreign window). The pointer position is the
+                // reliable signal that the click landed inside the panel; take focus back so the
+                // deferred check keeps it. A click elsewhere leaves both conditions false and the
+                // deferred check dismisses the panel.
+                if (CursorIsOverPanel() && IsVisible && !_allowClose)
                 {
                     ForceForeground();
-                    return;
                 }
 
-                var foreground = NativeMethods.GetForegroundWindow();
-                if (foreground == IntPtr.Zero)
-                {
-                    return;
-                }
+                return;
+            }
 
-                if (PidOf(foreground) == SelfProcessId)
-                {
-                    return;
-                }
-
-                Hide();
-            });
+            // Esc or a menu item: return focus so the panel stays for the next action.
+            if (IsVisible && !_allowClose)
+            {
+                ForceForeground();
+            }
         };
 
         return scope;
@@ -1041,7 +1163,7 @@ public partial class MainWindow : FluentWindow
                     return true;
             }
 
-            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+            current = ElementTree.ParentOf(current);
         }
 
         return false;
@@ -1077,7 +1199,7 @@ public partial class MainWindow : FluentWindow
                 return match;
             }
 
-            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+            current = ElementTree.ParentOf(current);
         }
 
         return null;

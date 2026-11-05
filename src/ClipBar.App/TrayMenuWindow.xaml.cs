@@ -267,10 +267,18 @@ public partial class TrayMenuWindow : FluentWindow
         Activate();
     }
 
+    /// <summary>
+    /// True when the menu closed because it lost focus (click outside, app switch). The panel's
+    /// owner-activation hand-back makes the panel active again even in that case, so the panel
+    /// cannot decide from IsActive alone whether the user is still working in it.
+    /// </summary>
+    public bool ClosedByDeactivation { get; private set; }
+
     private void Window_Deactivated(object? sender, EventArgs e)
     {
         if (_interactive && !_closing)
         {
+            ClosedByDeactivation = true;
             Close();
         }
     }
