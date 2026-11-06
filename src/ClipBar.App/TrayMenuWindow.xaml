@@ -101,7 +101,14 @@
                 BorderThickness="1"
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
                 Padding="3,4,3,4">
-            <StackPanel x:Name="MenuPanel" />
+            <!-- F-08: a long action/source list used to push its bottom rows off-screen with no
+                 way to reach them. The menu is capped at the monitor work area and scrolls;
+                 keyboard focus still walks the rows and brings them into view. -->
+            <ScrollViewer x:Name="MenuScroll"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="MenuPanel" />
+            </ScrollViewer>
         </Border>
     </Grid>
 </ui:FluentWindow>

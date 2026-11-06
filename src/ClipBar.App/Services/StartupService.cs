@@ -28,7 +28,7 @@ public sealed class StartupService
         }
     }
 
-    public bool SetEnabled(bool enabled)
+    public bool SetEnabled(bool enabled, string? arguments = null)
     {
         try
         {
@@ -47,7 +47,7 @@ public sealed class StartupService
                     return false;
                 }
 
-                key.SetValue(ValueName, $"\"{executable}\"");
+                key.SetValue(ValueName, BuildCommand(executable, arguments));
                 key.DeleteValue(LegacyValueName, throwOnMissingValue: false);
             }
             else
@@ -64,4 +64,14 @@ public sealed class StartupService
             return false;
         }
     }
+
+    /// <summary>
+    /// Builds the Run-entry command line. A custom data directory must survive the reboot:
+    /// the entry used to name the bare executable, so a <c>--data-dir</c> profile silently
+    /// started against the default store after a reboot (U-01).
+    /// </summary>
+    public static string BuildCommand(string executable, string? arguments)
+        => string.IsNullOrWhiteSpace(arguments)
+            ? $"\"{executable}\""
+            : $"\"{executable}\" {arguments.Trim()}";
 }

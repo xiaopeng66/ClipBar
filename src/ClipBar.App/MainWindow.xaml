@@ -172,6 +172,10 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
+            <!-- F-12: without a name the UIA tree reported every history row as the view-model
+                 type name, so screen readers could not tell rows apart. The visible title text
+                 is the semantic the row carries. -->
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">

@@ -179,7 +179,7 @@ public partial class App : Application
             // under the new name with the current exe path instead of silently turning it off.
             if (_settings.StartWithWindows && !_startup.IsEnabled)
             {
-                _startup.SetEnabled(true);
+                _startup.SetEnabled(true, StartupArguments);
             }
 
             var actualStartup = _startup.IsEnabled;
@@ -422,7 +422,7 @@ public partial class App : Application
             // window's backdrop, which left the acrylic panel painted flat white after a plain
             // 应用 click.
             ThemeService.Apply(_settings.Theme);
-            if (!_startup.SetEnabled(_settings.StartWithWindows))
+            if (!_startup.SetEnabled(_settings.StartWithWindows, StartupArguments))
             {
                 // The registry write can fail (policy/ACL); the next launch reconciles, but say
                 // so instead of letting settings.json and the registry silently disagree (G-23).
@@ -456,6 +456,14 @@ public partial class App : Application
         return (true, string.Empty);
     }
 
+    /// <summary>
+    /// Arguments the autostart Run entry must carry: a <c>--data-dir</c> profile has to
+    /// relaunch against the same profile, not the default store (U-01).
+    /// </summary>
+    private static string? StartupArguments => AppPaths.IsDefaultLocation
+        ? null
+        : "--data-dir \"" + AppPaths.DataDirectory + "\"";
+
     private async void ClearAllHistory()
     {
         Window? owner = _settingsWindow is { IsVisible: true }
@@ -470,6 +478,11 @@ public partial class App : Application
         {
             return;
         }
+
+        // F-07: clearing everything is a delete boundary — a pending 撤销 must not bring rows
+        // back afterwards. The undo bar is dropped (and its trashed PNG with it) before the
+        // repository is cleared.
+        _mainWindow?.ViewModel.DiscardPendingUndo();
 
         var images = await _repository.ClearAsync(includePinned: true);
         foreach (var image in images)

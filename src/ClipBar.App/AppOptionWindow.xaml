@@ -48,7 +48,15 @@
                                Margin="0,0,0,12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                    <StackPanel x:Name="OptionPanel" Grid.Row="1" />
+                    <!-- F-09: many options used to grow the window past the work area, pushing
+                         later selectors and the 运行/取消 buttons off-screen. The selector area
+                         scrolls inside a cap; the hint and the buttons always stay visible. -->
+                    <ScrollViewer x:Name="OptionScroll"
+                                  Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="OptionPanel" />
+                    </ScrollViewer>
 
                     <StackPanel Grid.Row="2"
                                 Orientation="Horizontal"

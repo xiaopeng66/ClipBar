@@ -18,6 +18,13 @@ public partial class AppOptionWindow : FluentWindow
     {
         InitializeComponent();
         ThemeService.RestoreBackdropsWhenLoaded(this);
+
+        // F-09: SizeToContent=Height alone let 24 selectors push the window past the work
+        // area, putting later options and the 运行/取消 buttons off-screen. The selector area
+        // scrolls within a cap that leaves room for the title bar, hint and button row; the
+        // cap uses the real work area so it holds on any monitor size.
+        OptionScroll.MaxHeight = Math.Max(240, SystemParameters.WorkArea.Height - 220);
+
         HintText.Text = $"{action.DisplayTitle} 需要先选择一个参数：";
 
         foreach (var option in options)

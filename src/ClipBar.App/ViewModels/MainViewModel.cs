@@ -643,7 +643,9 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Drops the pending undo and its trashed file (new delete, or panel closing).</summary>
+    /// <summary>Drops the pending undo and its trashed file (new delete, or panel closing).
+    /// The 撤销 bar is hidden with it: a bar whose pending undo is gone must not invite a
+    /// click that can no longer restore anything (found by the F-07 regression test).</summary>
     private void FinalizePendingUndo()
     {
         _undoCts?.Cancel();
@@ -655,11 +657,23 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         _pendingUndo = null;
+        UndoVisible = false;
     }
+
+    /// <summary>
+    /// Explicit boundary for destructive bulk operations: 清空全部 must invalidate a pending
+    /// single-row undo, otherwise the 撤销 toast could resurrect rows the user just wiped
+    /// (F-07). App calls this before it clears the repository; it is a method on the view
+    /// model rather than state surgery from outside.
+    /// </summary>
+    public void DiscardPendingUndo() => FinalizePendingUndo();
 
     [RelayCommand]
     private async Task ClearAsync()
     {
+        // Same rule as 清空全部: rows a pending undo would resurrect are about to be cleared.
+        FinalizePendingUndo();
+
         var images = await _repository.ClearAsync(includePinned: false).ConfigureAwait(true);
         foreach (var image in images)
         {

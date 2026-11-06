@@ -52,18 +52,39 @@ public static class ImageStore
 
         Directory.CreateDirectory(imagesDirectory);
         var path = Path.Combine(imagesDirectory, hash + ".png");
-        if (!File.Exists(path))
+
+        // F-04: the PNG is written to a unique temp file and atomically moved into place.
+        // Writing straight to the final path used to leave a truncated file behind when a
+        // cancellation or failure hit mid-write, and every later save of the same image then
+        // skipped rewriting because the (broken) file existed.
+        var temp = Path.Combine(imagesDirectory, ".tmp-" + Guid.NewGuid().ToString("N") + ".png");
+        try
         {
-            try
+            await using (var file = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                await using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 await file.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+                file.Flush(flushToDisk: true);
             }
-            catch (IOException) when (File.Exists(path))
+
+            var existing = new FileInfo(path);
+            if (existing is { Exists: true, Length: var existingLength } && existingLength == length)
             {
-                // Lost the race to another writer of the same content (the filename is the
-                // hash); its bytes are identical, so there is nothing left to do.
+                // The identical file is already complete (another writer won the race, or the
+                // image was stored before); drop the redundant temp copy.
+                File.Delete(temp);
             }
+            else
+            {
+                // Either no file yet, or a damaged one (0 bytes, truncated). Same-volume
+                // replace keeps the swap atomic: readers see the old file or the full one.
+                File.Move(temp, path, overwrite: true);
+            }
+        }
+        catch (Exception)
+        {
+            // Cancellation, a full disk, an IO error: never leave the half-written temp behind.
+            TryDelete(temp);
+            throw;
         }
 
         return new SavedImage(path, output.PixelWidth, output.PixelHeight, length, hash);
@@ -197,7 +218,10 @@ public static class ImageStore
     /// Deletes PNGs in <paramref name="imagesDirectory"/> that no row references. A crash between
     /// writing the file and inserting the row leaves such an orphan, and nothing else ever
     /// collects them, so the folder would grow without bound. Only files this store would have
-    /// created (32 hex chars + .png) are considered, so a stray user file is left alone.
+    /// created are considered — the file name is the <see cref="ClipHash"/> hex digest, so 64
+    /// characters (SHA-256); 32-char leftovers from very old builds are collected too. A
+    /// ".tmp-*" temp older than an hour (hard-kill mid-write) is collected as well; anything
+    /// else — a stray user file, a fresh temp from a save in flight — is left alone.
     /// </summary>
     public static int SweepOrphans(string imagesDirectory, IEnumerable<string> referencedPaths)
     {
@@ -216,10 +240,38 @@ public static class ImageStore
         }
 
         var removed = 0;
+        // A hard kill mid-write (no exception to clean up with) can strand a ".tmp-*" file
+        // forever. At sweep time no save is in flight, but an age floor keeps the rule
+        // obviously safe: nothing legitimate keeps a temp for an hour.
+        var staleTempCutoff = DateTime.UtcNow - TimeSpan.FromHours(1);
         foreach (var file in Directory.EnumerateFiles(imagesDirectory, "*.png"))
         {
             var name = Path.GetFileNameWithoutExtension(file);
-            if (name.Length != 32 || !name.All(Uri.IsHexDigit))
+            if (name.StartsWith(".tmp-", StringComparison.Ordinal))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(file) < staleTempCutoff)
+                    {
+                        File.Delete(file);
+                        removed++;
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+
+                continue;
+            }
+
+            if (name.Length is not (32 or 64) || !name.All(Uri.IsHexDigit))
+            {
+                continue;
+            }
+
+            // Mid-write temps from SavePngAsync carry a ".tmp-" prefix (so they never look
+            // like content), but a plain hex name that matches the hash contract is fair game.
+            if (referenced.Contains(Path.GetFullPath(file)))
             {
                 continue;
             }

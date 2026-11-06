@@ -1055,7 +1055,10 @@ public partial class MainWindow : FluentWindow
                 ViewModel.PasteSelectedCommand.Execute(null);
                 e.Handled = true;
                 break;
-            case Key.Delete when ViewModel.SelectedItem is not null:
+            // F-01: the tunnel runs before the search box sees the key, so an unscoped Delete
+            // deleted the selected history row while the user was only editing the query.
+            case Key.Delete when ViewModel.SelectedItem is not null
+                && !PanelKeyScoping.IsRoutedToTextEditor(e.OriginalSource, Keyboard.FocusedElement):
                 ViewModel.DeleteCommand.Execute(ViewModel.SelectedItem);
                 e.Handled = true;
                 break;

@@ -37,6 +37,13 @@ public sealed class ExtensionService
         {
             foreach (var folder in Directory.EnumerateDirectories(_extensionsDirectory))
             {
+                // ".import-*" / ".backup-*" are mid-import state (staging and swap backups).
+                // Loading them used to expose half-copied packages as installed extensions.
+                if (Path.GetFileName(folder).StartsWith('.'))
+                {
+                    continue;
+                }
+
                 var loaded = TryLoadFolder(folder);
                 if (loaded is not null)
                 {
@@ -85,22 +92,55 @@ public sealed class ExtensionService
             var manifestRoot = Path.GetDirectoryName(manifestPath)!;
             var extension = SnipDoManifestParser.Parse(json, manifestRoot);
 
-            var folderName = SafePath.SlugOrFallback(extension.Identifier);
-            var target = Path.Combine(_extensionsDirectory, folderName);
-            if (!SafePath.IsInside(_extensionsDirectory, target))
+            var target = ResolveTargetDirectory(extension);
+            AssertTargetIdentity(target, extension.Identifier);
+
+            // F-02: swap the new package in through a backup instead of deleting the old
+            // folder first. A failure mid-swap (locked file, denied ACL, cancelled token)
+            // restores the old package rather than leaving it deleted.
+            var backup = Path.Combine(_extensionsDirectory, ".backup-" + Guid.NewGuid().ToString("N")[..8]);
+            var hasExisting = Directory.Exists(target);
+            if (hasExisting)
             {
-                throw new SnipDoManifestException("扩展标识无法安全地映射为目录名：" + extension.Identifier);
+                Directory.Move(target, backup);
             }
 
-            if (Directory.Exists(target))
+            try
             {
-                SafePath.DeleteInside(_extensionsDirectory, target);
+                Directory.Move(manifestRoot, target);
+            }
+            catch
+            {
+                if (hasExisting && !Directory.Exists(target))
+                {
+                    Directory.Move(backup, target);
+                }
+
+                throw;
             }
 
-            Directory.Move(manifestRoot, target);
             if (Directory.Exists(staging))
             {
-                Directory.Delete(staging, recursive: true);
+                // Cleanup only: a locked leftover must not fail an import that already
+                // swapped in cleanly. Reload skips dot-folders either way.
+                try
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+
+            if (hasExisting && Directory.Exists(backup))
+            {
+                try
+                {
+                    SafePath.DeleteInside(_extensionsDirectory, backup);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
             }
 
             Reload();
@@ -152,6 +192,68 @@ public sealed class ExtensionService
         var extension = SnipDoManifestParser.Parse(json, manifestRoot);
 
         Directory.CreateDirectory(_extensionsDirectory);
+        var target = ResolveTargetDirectory(extension);
+        AssertTargetIdentity(target, extension.Identifier);
+
+        // F-02: copy into staging first, so a failure during the copy cannot destroy the
+        // installed package; the store is only touched by the backup-protected swap below.
+        var staging = Path.Combine(_extensionsDirectory, ".import-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            await Task.Run(() => CopyTree(manifestRoot, staging), cancellationToken).ConfigureAwait(false);
+
+            var backup = Path.Combine(_extensionsDirectory, ".backup-" + Guid.NewGuid().ToString("N")[..8]);
+            var hasExisting = Directory.Exists(target);
+            if (hasExisting)
+            {
+                Directory.Move(target, backup);
+            }
+
+            try
+            {
+                Directory.Move(staging, target);
+            }
+            catch
+            {
+                if (hasExisting && !Directory.Exists(target))
+                {
+                    Directory.Move(backup, target);
+                }
+
+                throw;
+            }
+
+            if (hasExisting && Directory.Exists(backup))
+            {
+                SafePath.DeleteInside(_extensionsDirectory, backup);
+            }
+
+            Reload();
+            return _extensions.FirstOrDefault(
+                       e => string.Equals(e.Extension.Identifier, extension.Identifier, StringComparison.OrdinalIgnoreCase))
+                   ?? TryLoadFolder(target)
+                   ?? throw new SnipDoManifestException("导入后无法读取扩展。");
+        }
+        catch
+        {
+            if (Directory.Exists(staging))
+            {
+                try
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>Maps an extension identifier to a folder inside the store (path safety only).</summary>
+    private string ResolveTargetDirectory(SnipDoExtension extension)
+    {
         var folderName = SafePath.SlugOrFallback(extension.Identifier);
         var target = Path.Combine(_extensionsDirectory, folderName);
         if (!SafePath.IsInside(_extensionsDirectory, target))
@@ -159,13 +261,29 @@ public sealed class ExtensionService
             throw new SnipDoManifestException("扩展标识无法安全地映射为目录名：" + extension.Identifier);
         }
 
-        await Task.Run(() => CopyFolder(manifestRoot, target), cancellationToken).ConfigureAwait(false);
+        return target;
+    }
 
-        Reload();
-        return _extensions.FirstOrDefault(
-                   e => string.Equals(e.Extension.Identifier, extension.Identifier, StringComparison.OrdinalIgnoreCase))
-               ?? TryLoadFolder(target)
-               ?? throw new SnipDoManifestException("导入后无法读取扩展。");
+    /// <summary>
+    /// The folder name is derived from the identifier by a lossy slug, so two different
+    /// identifiers can map to the same directory (F-05: "audit/a" and "audit-a" both became
+    /// "audit-a"). Only an extension that already owns this folder may replace it; anything
+    /// else — including a folder whose manifest cannot be read — is refused instead of deleted.
+    /// </summary>
+    private void AssertTargetIdentity(string target, string identifier)
+    {
+        if (!Directory.Exists(target))
+        {
+            return;
+        }
+
+        var existing = TryLoadFolder(target);
+        if (existing is null
+            || !string.Equals(existing.Extension.Identifier, identifier, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SnipDoManifestException(
+                "目录 " + Path.GetFileName(target) + " 已被另一个扩展占用（标识不符），导入已取消，原有扩展未修改。");
+        }
     }
 
     public bool Remove(string identifier)
@@ -291,17 +409,15 @@ public sealed class ExtensionService
         return written;
     }
 
-    private static void CopyFolder(string source, string target)
+    /// <summary>
+    /// Copies an extension source tree into a fresh target directory. The caller owns the
+    /// swap: this never deletes or overwrites an existing store folder, so a failure here
+    /// leaves the installed package untouched (F-02).
+    /// </summary>
+    private static void CopyTree(string source, string target)
     {
         var sourceFull = Path.GetFullPath(source);
         var targetFull = Path.GetFullPath(target);
-
-        // Importing a folder that already lives inside the store is a no-op, and copying
-        // it onto itself would recurse.
-        if (string.Equals(sourceFull, targetFull, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
 
         // Copying into a folder nested under the source would re-enumerate its own output
         // forever (or inflate the tree on every pass), so refuse that shape outright.
@@ -310,9 +426,9 @@ public sealed class ExtensionService
             throw new SnipDoManifestException("扩展目录不能被复制到它自己的子目录里。");
         }
 
-        if (Directory.Exists(target))
+        if (Directory.Exists(targetFull))
         {
-            Directory.Delete(target, recursive: true);
+            throw new SnipDoManifestException("导入暂存目录已存在：" + targetFull);
         }
 
         Directory.CreateDirectory(targetFull);

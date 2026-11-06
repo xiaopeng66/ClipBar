@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using ClipBar.App.Platform;
@@ -50,6 +51,20 @@ public sealed class ExtensionActionRunner
         string? html = null,
         string? sourceApp = null)
     {
+        // F-10: an option whose values come from a script (no static choices) has no data
+        // flow in this app — nothing evaluates SnipDoAppOption.PowershellFile. Running the
+        // action anyway used to leave the {APPOPTION …} placeholder unresolved in the URL or
+        // key combo and still report success, so the action is refused up front instead.
+        if (action.Options.Any(o => o.Values.Count == 0))
+        {
+            var name = action.Options.First(o => o.Values.Count == 0).Identifier;
+            AppLog.Write($"Extension action '{action.Title}' refused: option '{name}' needs a script-generated value, which is not supported");
+            return new ActionResult(
+                false,
+                null,
+                $"该动作的参数「{name}」需要脚本生成，当前版本不支持，已跳过。");
+        }
+
         var context = new SnipDoTextContext(text, filePaths ?? [], appOptions)
         {
             Html = html,

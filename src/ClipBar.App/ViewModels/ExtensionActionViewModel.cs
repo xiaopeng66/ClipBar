@@ -3,6 +3,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ClipBar.App.Services;
 using ClipBar.Core.Models;
+using ClipBar.Core.Security;
 
 namespace ClipBar.App.ViewModels;
 
@@ -46,10 +47,18 @@ public sealed class ExtensionActionViewModel
             // SnipDo ships its icons as SVG, which BitmapImage cannot decode.
             if (string.Equals(Path.GetExtension(path), ".svg", StringComparison.OrdinalIgnoreCase))
             {
-                var vector = SvgIconLoader.Load(path, IconSize);
-                if (vector is not null)
+                try
                 {
-                    return vector;
+                    var vector = SvgIconLoader.Load(path, IconSize);
+                    if (vector is not null)
+                    {
+                        return vector;
+                    }
+                }
+                catch (Exception)
+                {
+                    // F-03 defence in depth: a malformed icon must never break action-menu
+                    // construction; ParseColor is total, this backstops any other parse path.
                 }
 
                 continue;
@@ -82,23 +91,17 @@ public sealed class ExtensionActionViewModel
             return null;
         }
 
-        // Extension icons are package-relative file names; absolute paths are accepted too.
         var trimmed = relative.Trim();
         if (trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
-        try
-        {
-            var path = Path.IsPathRooted(trimmed)
-                ? Path.GetFullPath(trimmed)
-                : Path.GetFullPath(Path.Combine(root, trimmed.Replace('/', Path.DirectorySeparatorChar)));
-            return File.Exists(path) ? path : null;
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
+        // F-11 (legacy E-12): the manifest is untrusted input, so an icon may only resolve to
+        // a file inside the package — the same containment rule the manifest parser applies.
+        // The old consumer-side resolver accepted "../outside.svg" and absolute paths, which
+        // read files from anywhere on disk.
+        var path = SafePath.TryResolveInside(root, trimmed, "动作图标");
+        return path is not null && File.Exists(path) ? path : null;
     }
 }

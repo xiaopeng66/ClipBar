@@ -586,6 +586,12 @@ public static class SvgIconLoader
         return null;
     }
 
+    /// <summary>
+    /// Parses an SVG colour value. Total by design (F-03): any malformed value — "#GGGGGG",
+    /// an unclosed "rgb(" — returns null instead of throwing, because a single bad icon used
+    /// to abort the whole action-menu construction. Unknown values render with the fallback
+    /// style rather than breaking the menu.
+    /// </summary>
     private static Color? ParseColor(string text)
     {
         var value = text.Trim();
@@ -594,16 +600,28 @@ public static class SvgIconLoader
             var hex = value[1..];
             return hex.Length switch
             {
-                3 => Color.FromRgb(Expand(hex[0]), Expand(hex[1]), Expand(hex[2])),
-                4 => Color.FromArgb(Expand(hex[3]), Expand(hex[0]), Expand(hex[1]), Expand(hex[2])),
-                6 => Color.FromRgb(Byte(hex, 0), Byte(hex, 2), Byte(hex, 4)),
-                8 => Color.FromArgb(Byte(hex, 6), Byte(hex, 0), Byte(hex, 2), Byte(hex, 4)),
+                3 when Expand(hex[0]) is { } r0 && Expand(hex[1]) is { } g0 && Expand(hex[2]) is { } b0
+                    => Color.FromRgb(r0, g0, b0),
+                4 when Expand(hex[3]) is { } a4 && Expand(hex[0]) is { } r4
+                    && Expand(hex[1]) is { } g4 && Expand(hex[2]) is { } b4
+                    => Color.FromArgb(a4, r4, g4, b4),
+                6 when Byte(hex, 0) is { } r6 && Byte(hex, 2) is { } g6 && Byte(hex, 4) is { } b6
+                    => Color.FromRgb(r6, g6, b6),
+                8 when Byte(hex, 6) is { } a8 && Byte(hex, 0) is { } r8
+                    && Byte(hex, 2) is { } g8 && Byte(hex, 4) is { } b8
+                    => Color.FromArgb(a8, r8, g8, b8),
                 _ => null,
             };
         }
 
         if (value.StartsWith("rgb(", StringComparison.OrdinalIgnoreCase))
         {
+            // An unclosed "rgb(1,2,3" made LastIndexOf(')') return -1 and the range below throw.
+            if (!value.EndsWith(')'))
+            {
+                return null;
+            }
+
             var numbers = value[(value.IndexOf('(') + 1)..value.LastIndexOf(')')]
                 .Split([',', ' '], StringSplitOptions.RemoveEmptyEntries)
                 .Select(n => double.TryParse(n, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : 0d)
@@ -628,8 +646,23 @@ public static class SvgIconLoader
             _ => null,
         };
 
-        static byte Expand(char c) => Convert.ToByte(new string(c, 2), 16);
-        static byte Byte(string hex, int offset) => Convert.ToByte(hex.Substring(offset, 2), 16);
+        static byte? Expand(char c) => HexNibble(c) is { } nibble ? (byte)(nibble * 17) : null;
+
+        static byte? Byte(string hex, int offset)
+        {
+            var high = HexNibble(hex[offset]);
+            var low = HexNibble(hex[offset + 1]);
+            return high is null || low is null ? null : (byte)((high * 16) + low);
+        }
+
+        static int? HexNibble(char c) => c switch
+        {
+            >= '0' and <= '9' => c - '0',
+            >= 'a' and <= 'f' => c - 'a' + 10,
+            >= 'A' and <= 'F' => c - 'A' + 10,
+            _ => null,
+        };
+
         static byte Clamp(double v) => (byte)Math.Clamp(v, 0d, 255d);
     }
 

@@ -198,10 +198,21 @@ public partial class TrayMenuWindow : FluentWindow
                 desired = root.DesiredSize;
             }
 
+            // F-08: cap the menu at the monitor work area (minus the placement margins). A
+            // taller list scrolls inside that bound instead of running off the screen; the
+            // clamp happens before the first frame, so no oversized flash is visible.
+            var maxHeight = MenuHeightBound(work.Height);
             var measuredHeight = Math.Ceiling(desired.Height);
             if (measuredHeight > 0)
             {
-                Height = measuredHeight;
+                if (measuredHeight > maxHeight)
+                {
+                    BoundHeightTo(maxHeight);
+                }
+                else
+                {
+                    Height = measuredHeight;
+                }
             }
         }
 
@@ -293,6 +304,34 @@ public partial class TrayMenuWindow : FluentWindow
         {
             first.Focus();
         }
+    }
+
+    /// <summary>
+    /// F-08: the largest on-screen height a menu may take on a monitor whose work area is
+    /// <paramref name="workAreaHeight"/> DIP tall — the placement margins stay free on both
+    /// sides so the clamped menu still fits where ShowAt wants to put it.
+    /// </summary>
+    internal static double MenuHeightBound(double workAreaHeight)
+        => Math.Max(120, workAreaHeight - (2 * ScreenMargin));
+
+    /// <summary>
+    /// Caps the menu at <paramref name="maxHeight"/>: taller content scrolls inside the bound
+    /// instead of running off the screen. Called before the first frame, so no oversized
+    /// flash is visible.
+    /// </summary>
+    internal void BoundHeightTo(double maxHeight)
+    {
+        if (Content is FrameworkElement root)
+        {
+            root.Measure(new Size(double.IsNaN(Width) ? MaxWidth : Width, maxHeight));
+            Height = Math.Ceiling(root.DesiredSize.Height);
+        }
+        else
+        {
+            Height = maxHeight;
+        }
+
+        MenuScroll.MaxHeight = maxHeight;
     }
 
     /// <summary>Monitor work area converted to DIPs with the monitor's own scale.</summary>
