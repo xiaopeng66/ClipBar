@@ -77,6 +77,7 @@ public partial class MainWindow : FluentWindow
     private int _geometryEpoch;
     private object? _selectionBeforeRightClick;
     private ClipItemViewModel? _menuAnchorItem;
+    private TrayMenuWindow? _openMenu;
     private readonly SemaphoreSlim _pasteGate = new(1, 1);
     private bool _outsideClickDuringSuppression;
     private bool _showTransitionActive;
@@ -924,6 +925,15 @@ public partial class MainWindow : FluentWindow
             // A menu/dialog/keep-open paste is holding the panel. Remember that the user moved
             // on: the scope decides on release (keep-open cancels its focus hand-back).
             _outsideClickDuringSuppression = true;
+
+            // Close our own menu right away. Clicking a tray icon or another app's popup does
+            // not always activate a foreign window, so no Deactivated arrives and the menu
+            // would stay on screen next to the other app's menu (measured with a tray menu).
+            if (_openMenu is { IsVisible: true } openMenu)
+            {
+                openMenu.Close();
+            }
+
             return;
         }
 
@@ -1267,8 +1277,14 @@ public partial class MainWindow : FluentWindow
     private IDisposable AttachMenuLifetime(TrayMenuWindow menu)
     {
         var scope = SuppressAutoHide();
+        _openMenu = menu;
         menu.Closed += (_, _) =>
         {
+            if (ReferenceEquals(_openMenu, menu))
+            {
+                _openMenu = null;
+            }
+
             _menuAnchorItem?.IsMenuAnchor = false;
             _menuAnchorItem = null;
 
