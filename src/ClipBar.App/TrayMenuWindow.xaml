@@ -35,6 +35,24 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle">
+                <Setter.Value>
+                    <!-- Keyboard-only focus ring (WPF shows this for keyboard focus, not mouse):
+                         a row must never look "selected" before the user selects it. -->
+                    <Style TargetType="Control">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate>
+                                    <Border CornerRadius="6"
+                                            BorderThickness="1"
+                                            BorderBrush="{DynamicResource SystemAccentColorBrush}"
+                                            Opacity="0.8" />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -63,16 +81,6 @@
                                 </MultiTrigger.Conditions>
                                 <Setter TargetName="Bg" Property="Background"
                                         Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
-                            </MultiTrigger>
-                            <!-- Keyboard focus needs its own visible state: without it a menu-key
-                                 / Shift+F10 menu looked inert even while the window was active. -->
-                            <MultiTrigger>
-                                <MultiTrigger.Conditions>
-                                    <Condition Property="IsKeyboardFocused" Value="True" />
-                                    <Condition Property="IsEnabled" Value="True" />
-                                </MultiTrigger.Conditions>
-                                <Setter TargetName="Bg" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.55" />

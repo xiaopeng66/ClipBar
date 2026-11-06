@@ -1086,7 +1086,7 @@ public partial class MainWindow : FluentWindow
     /// exactly the menu's lifetime — FluentWindow.Closed is a reliable release point, unlike the
     /// native ContextMenu's Closed (measured: never raised for programmatic closes).
     /// </summary>
-    private TrayMenuWindow OpenClipContextMenu(ClipItemViewModel item, int anchorX, int anchorY)
+    private TrayMenuWindow OpenClipContextMenu(ClipItemViewModel item, int anchorX, int anchorY, bool fromKeyboard = false)
     {
         AppLog.Write($"Clip menu open: clip={item.Id}, kind={item.Kind}, anchor={anchorX},{anchorY}");
         var actions = ViewModel.GetApplicableActions(item);
@@ -1133,6 +1133,7 @@ public partial class MainWindow : FluentWindow
 
         var menu = TrayMenuWindow.Create(entries, width: 0);
         menu.Owner = this;
+        menu.FocusFirstRowOnShow = fromKeyboard;
         HistoryList.SelectedItem = item;
 
         var lifetime = AttachMenuLifetime(menu);
@@ -1185,7 +1186,7 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        OpenClipContextMenu(item, anchor.X, anchor.Y);
+        OpenClipContextMenu(item, anchor.X, anchor.Y, fromKeyboard: true);
     }
 
     /// <summary>
@@ -1269,6 +1270,8 @@ public partial class MainWindow : FluentWindow
 
         var menu = TrayMenuWindow.Create(entries, width: 0);
         menu.Owner = this;
+        menu.FocusFirstRowOnShow = System.Windows.Input.InputManager.Current.MostRecentInputDevice
+            is System.Windows.Input.KeyboardDevice;
         var lifetime = AttachMenuLifetime(menu);
 
         // The footer button sits at the panel's bottom edge: anchor on its top-left corner and

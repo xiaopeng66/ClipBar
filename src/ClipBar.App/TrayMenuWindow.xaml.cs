@@ -19,6 +19,13 @@ public partial class TrayMenuWindow : FluentWindow
 
     private bool _interactive;
 
+    /// <summary>
+    /// Focus the first enabled row once the menu is visible. Only for keyboard-invoked menus:
+    /// a mouse right-click must not paint a "selected" row the user never selected (measured
+    /// complaint), while Shift+F10 / menu-key users need a visible starting point.
+    /// </summary>
+    public bool FocusFirstRowOnShow { get; set; }
+
     // Deactivation fires *during* a close as focus leaves; calling Close() from inside that
     // notification throws "cannot call Close while the window is closing" (measured in the
     // automation harness), so every close trigger checks this flag first.
@@ -216,6 +223,15 @@ public partial class TrayMenuWindow : FluentWindow
             }
         }
 
+        // Mouse-opened menus must not show any row as "current": with focusable rows, WPF
+        // focuses the first one when the window activates, which painted a focus ring the user
+        // never asked for. Keyboard-invoked menus keep focusable rows so the first one can be
+        // focused and announced.
+        foreach (var row in MenuPanel.Children.OfType<System.Windows.Controls.Button>())
+        {
+            row.Focusable = FocusFirstRowOnShow;
+        }
+
         // Position and size are final before the first frame; the window is also DWM-cloaked
         // until its content has rendered, so no half-painted frame can be seen. Activation is
         // deferred to after the uncloak (activating a cloaked window does nothing).
@@ -248,9 +264,9 @@ public partial class TrayMenuWindow : FluentWindow
             return;
         }
 
-        // Keyboard focus: a menu that is foreground but has no focused row reads as inert for
-        // menu-key / Shift+F10 users. The focused row lights up via IsKeyboardFocused.
-        if (MenuPanel.Children.OfType<System.Windows.Controls.Button>().FirstOrDefault(b => b.IsEnabled) is { } first)
+        // Keyboard focus: only menus opened from the keyboard get a highlighted first row.
+        if (FocusFirstRowOnShow
+            && MenuPanel.Children.OfType<System.Windows.Controls.Button>().FirstOrDefault(b => b.IsEnabled) is { } first)
         {
             first.Focus();
         }
