@@ -43,6 +43,10 @@ public partial class TrayMenuWindow : FluentWindow
     public static TrayMenuWindow Create(IReadOnlyList<TrayMenuEntry> entries, double width = 176)
     {
         var window = new TrayMenuWindow();
+        // Menus that mix icon and icon-less rows (e.g. the source menu: check-marked current
+        // item + plain items) read aligned only if every label starts at the same x, so
+        // icon-less rows reserve the same 24 DIP icon slot.
+        var anyIcon = entries.Any(e => e.Icon is not null);
         if (width <= 0)
         {
             // Content-sized rows (the clip context menu): bounded so a long community action
@@ -104,7 +108,19 @@ public partial class TrayMenuWindow : FluentWindow
                     label.TextWrapping = TextWrapping.NoWrap;
                 }
 
-                content = label;
+                if (anyIcon)
+                {
+                    // Same 16 DIP icon slot + 8 DIP gap the icon rows use.
+                    var spacer = new System.Windows.Controls.Border { Width = 24 };
+                    var rowPanel = new StackPanel { Orientation = Orientation.Horizontal };
+                    rowPanel.Children.Add(spacer);
+                    rowPanel.Children.Add(label);
+                    content = rowPanel;
+                }
+                else
+                {
+                    content = label;
+                }
             }
 
             var item = new System.Windows.Controls.Button

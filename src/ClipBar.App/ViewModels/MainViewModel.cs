@@ -264,10 +264,12 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             // Same contract as ObserveAsync: report once per failure streak, never crash.
-            if (Interlocked.Exchange(ref _refreshFailureReported, 1) == 0)
-            {
-                _refreshFailed(ex);
-            }
+            // Startup reports while the panel is still hidden, so the report is log-only —
+            // re-arm the streak, or the first failure the user could actually SEE (right
+            // after they open the panel) stays suppressed too and the list looks empty with
+            // no explanation (R13-F-01).
+            _refreshFailed(ex);
+            Volatile.Write(ref _refreshFailureReported, 0);
         }
         finally
         {

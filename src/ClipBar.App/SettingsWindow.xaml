@@ -135,8 +135,6 @@
                             <ComboBoxItem Content="深色" Tag="Dark" />
                         </ComboBox>
                     </Grid>
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="跟随鼠标指针：唤出时按指针周围的剩余空间自动选择展开方向；无论哪种方式，尺寸始终记忆。" />
                     <Grid Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -150,8 +148,6 @@
                             <ComboBoxItem Content="小（左侧图标）" Tag="Small" />
                         </ComboBox>
                     </Grid>
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="跟随鼠标指针：唤出时按指针周围的剩余空间自动选择展开方向；无论哪种方式，尺寸始终记忆。" />
                     <TextBlock Text="大/中等比显示完整图片，指针停在图上时提示尺寸、来源和时间；小把缩略图放进左侧图标位，常驻显示这些信息。"
                                Style="{StaticResource Hint}" />
                 </StackPanel>

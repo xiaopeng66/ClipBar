@@ -255,6 +255,10 @@
                                 <Setter TargetName="Bg" Property="Background"
                                         Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -367,17 +371,17 @@
                          ItemContainerStyle="{StaticResource FilterItemStyle}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" />
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Label}" />
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
 
                 <!-- History -->
                 <Grid Grid.Row="2">
@@ -576,7 +580,7 @@
                                    HorizontalAlignment="Center"
                                    FontSize="11"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                        <TextBlock Text="右键条目可执行扩展动作（如已导入）"
+                        <TextBlock Text="右键条目可执行扩展动作（需先在设置中导入）"
                                    Margin="0,4,0,0"
                                    HorizontalAlignment="Center"
                                    FontSize="11"

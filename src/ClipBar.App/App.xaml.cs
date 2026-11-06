@@ -424,7 +424,7 @@ public partial class App : Application
             // The candidate is already live; the caller keeps the form dirty so the state the
             // user sees is what is running (R12-F-10).
             AppLog.Error("Apply settings side effects", ex);
-            return (false, "设置已生效，但应用过程中出错：" + ex.Message);
+            return (false, "设置已生效，但应用过程中出错：" + ex.Message + "（未写入设置文件，重启后会恢复为修改前的值。）");
         }
 
         if (!TrySaveSettings())

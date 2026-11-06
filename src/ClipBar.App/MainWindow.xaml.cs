@@ -202,12 +202,26 @@ public partial class MainWindow : FluentWindow
     {
         if (!NativeMethods.GetCursorPos(out var cursor))
         {
-            // Essentially never fails on an interactive desktop; fall back to the primary
-            // work-area centre so the panel still opens somewhere sane (R12-F-05).
-            var wa = SystemParameters.WorkArea;
-            cursor = new NativeMethods.Point(
-                (int)(wa.Left + wa.Width / 2),
-                (int)(wa.Top + wa.Height / 2));
+            // Essentially never fails on an interactive desktop; fall back to the physical
+            // centre of the primary monitor's work area — the consumer treats cursor
+            // coordinates as physical pixels, and WorkArea here is DIPs (R13-F-02).
+            var primary = NativeMethods.MonitorFromPoint(
+                new NativeMethods.Point(0, 0),
+                NativeMethods.MonitorDefaultToNearest);
+            var info = new NativeMethods.MonitorInfo
+            {
+                Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MonitorInfo>(),
+            };
+            if (primary != IntPtr.Zero && NativeMethods.GetMonitorInfo(primary, ref info))
+            {
+                cursor = new NativeMethods.Point(
+                    info.Work.Left + (info.Work.Right - info.Work.Left) / 2,
+                    info.Work.Top + (info.Work.Bottom - info.Work.Top) / 2);
+            }
+            else
+            {
+                cursor = new NativeMethods.Point(0, 0);
+            }
         }
 
         await ViewModel.EnsureInitialLoadedAsync().ConfigureAwait(true);
@@ -1147,10 +1161,12 @@ public partial class MainWindow : FluentWindow
     /// <summary>Compact source filter: a funnel button with a menu instead of a wide dropdown.</summary>
     private void SourceFilter_Click(object sender, RoutedEventArgs e)
     {
+        var allSelected = ViewModel.SelectedSource == "全部来源";
         var entries = new List<TrayMenuEntry>
         {
             TrayMenuEntry.Item("全部来源", () => ViewModel.SelectedSource = "全部来源",
-                bold: ViewModel.SelectedSource == "全部来源"),
+                bold: allSelected,
+                icon: allSelected ? MenuGlyph(SymbolRegular.Checkmark24) : null),
         };
         foreach (var source in ViewModel.SourceOptions)
         {
