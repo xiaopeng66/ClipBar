@@ -438,6 +438,18 @@ public partial class MainWindow : FluentWindow
 
                 var deactivated = _deactivatedWhileSuppressed;
                 _deactivatedWhileSuppressed = false;
+
+                // The click that dismissed the menu can be swallowed by the menu window: the
+                // pointer is inside the panel, yet the panel never got activation back. Judging
+                // by the foreground alone then hides the panel under the user's cursor (measured:
+                // right-clicking the next row while a menu was open hid it ~50% of the time).
+                // Pointer inside = the user clicked the panel, never dismiss.
+                if (IsVisible && !_allowClose && CursorIsOverPanel())
+                {
+                    ForceForeground();
+                    return;
+                }
+
                 // Judge by the foreground window: a closing owned menu makes WPF mark the owner
                 // active even when the click landed on another app, so IsActive would lie here.
                 // A zero foreground counts as foreign in this callback: it only runs after the
@@ -773,6 +785,14 @@ public partial class MainWindow : FluentWindow
         }
 
         if (PidOf(foreground) == SelfProcessId)
+        {
+            _foreignFocusTicks = 0;
+            return;
+        }
+
+        // Pointer inside the panel: the menu may have swallowed the click that should have
+        // activated us (measured). Wait for the user to move away before counting.
+        if (CursorIsOverPanel())
         {
             _foreignFocusTicks = 0;
             return;

@@ -236,7 +236,9 @@ public partial class TrayMenuWindow : FluentWindow
         }
 
         _interactive = true;
-        if (NativeMethods.GetForegroundWindow() != hwnd)
+        var activated = NativeMethods.GetForegroundWindow() == hwnd;
+        AppLog.Write($"Menu shown: activated={activated}, rect={Left:0},{Top:0} {Width:0}x{Height:0}");
+        if (!activated)
         {
             AppLog.Write("Menu shown but activation failed; closing instead of leaving it inert");
             Close();
@@ -322,6 +324,7 @@ public partial class TrayMenuWindow : FluentWindow
 
     private void Window_Deactivated(object? sender, EventArgs e)
     {
+        AppLog.Write($"Menu deactivated: interactive={_interactive}, closing={_closing}");
         if (_interactive && !_closing)
         {
             ClosedByDeactivation = true;
@@ -333,6 +336,7 @@ public partial class TrayMenuWindow : FluentWindow
     {
         if (e.Key == System.Windows.Input.Key.Escape && !_closing)
         {
+            AppLog.Write("Menu closed by Esc");
             Close();
             e.Handled = true;
         }
