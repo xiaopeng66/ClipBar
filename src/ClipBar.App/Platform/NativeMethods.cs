@@ -143,6 +143,54 @@ internal static class NativeMethods
     [DllImport("kernel32.dll")]
     public static extern IntPtr GetModuleHandle(string? module);
 
+    // ---- power throttling (EcoQoS) ------------------------------------------------------
+
+    private const int ProcessPowerThrottling = 4;
+    private const uint PowerThrottlingExecutionSpeed = 0x1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessPowerThrottlingState
+    {
+        public uint Version;
+        public uint ControlMask;
+        public uint StateMask;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetProcessInformation(
+        IntPtr process,
+        int informationClass,
+        ref ProcessPowerThrottlingState information,
+        int size);
+
+    /// <summary>
+    /// Opts this process out of Windows' background execution-speed throttling (EcoQoS).
+    /// A tray app is idle most of the time; without this, the first operation after a long
+    /// idle period can be silently slowed down by the scheduler. Best effort: older builds
+    /// simply keep the default behaviour.
+    /// </summary>
+    public static void DisablePowerThrottling()
+    {
+        try
+        {
+            var state = new ProcessPowerThrottlingState
+            {
+                Version = 1,
+                ControlMask = PowerThrottlingExecutionSpeed,
+                StateMask = 0,
+            };
+            SetProcessInformation(
+                System.Diagnostics.Process.GetCurrentProcess().Handle,
+                ProcessPowerThrottling,
+                ref state,
+                Marshal.SizeOf<ProcessPowerThrottlingState>());
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+    }
+
     [DllImport("user32.dll")]
     public static extern IntPtr WindowFromPoint(Point point);
 

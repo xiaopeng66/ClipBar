@@ -179,8 +179,13 @@ public partial class MainWindow : FluentWindow
         DpiScale = newDpi.DpiScaleX > 0 ? newDpi.DpiScaleX : 1.0;
     }
 
+    private readonly System.Diagnostics.Stopwatch _showStopwatch = new();
+    private string _lastShowReason = "unknown";
+
     public void ShowPanel(string reason = "unknown")
     {
+        _showStopwatch.Restart();
+        _lastShowReason = reason;
         // Fire-and-forget: the initial load is a single-flight Task (created in the constructor),
         // so the second and every later call await the same completed task and stay on the fast
         // path. The cursor is captured NOW, before any await: preloading must not make the panel
@@ -439,6 +444,7 @@ public partial class MainWindow : FluentWindow
 
         // Only now is the panel really interactive: anything earlier is part of showing it.
         _showCompleted = true;
+        AppLog.Write($"Panel shown in {_showStopwatch.ElapsedMilliseconds}ms ({_lastShowReason})");
         _foreignFocusTicks = 0;
         _focusWatchdog.Start();
         _outsideClickHook?.Dispose();

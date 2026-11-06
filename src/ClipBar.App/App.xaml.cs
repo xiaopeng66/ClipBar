@@ -44,6 +44,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Keep the tray-resident process responsive after long idle periods.
+        NativeMethods.DisablePowerThrottling();
+
         // Data location must be settled before anything reads AppPaths (log, settings, DB):
         // --data-dir, then a portable.marker next to the exe, then %LOCALAPPDATA%\ClipBar.
         AppPaths.Initialize(ReadOption(e.Args, "--data-dir"), AppContext.BaseDirectory);
