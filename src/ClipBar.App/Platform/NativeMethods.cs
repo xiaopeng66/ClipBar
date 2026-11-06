@@ -218,13 +218,6 @@ internal static class NativeMethods
     private const int DwncEnabled = 2;
 
     /// <summary>
-    /// Removes the Win11 system border (a ~1px light hairline on dark windows). The panel,
-    /// menus and dialogs draw their own border; leaving the system one in place is what made
-    /// the panel look like it had a white edge.
-    /// </summary>
-    public static void RemoveSystemBorder(IntPtr hwnd) => SetBorderColor(hwnd, DwmColorNone);
-
-    /// <summary>
     /// Pins the system border to one colour. A fixed colour (instead of the active/inactive
     /// default) keeps the window's frame identical in every activation state; DWMWA_COLOR_NONE
     /// made the frame transparent, which showed the desktop through it as a light band.

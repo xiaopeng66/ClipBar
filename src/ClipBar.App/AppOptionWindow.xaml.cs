@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using ClipBar.App.Platform;
 using ClipBar.App.Services;
 using ClipBar.Core.Models;
 using Wpf.Ui.Controls;
@@ -18,6 +19,10 @@ public partial class AppOptionWindow : FluentWindow
     {
         InitializeComponent();
         ThemeService.RestoreBackdropsWhenLoaded(this);
+        // White-edge fix: pin the DWM border like the panel/menus do, so the system frame's
+        // default light border cannot outline this window (FrameBorder re-pins on every
+        // activation transition, which repaints the frame).
+        FrameBorder.Pin(this);
 
         // F-09: SizeToContent=Height alone let 24 selectors push the window past the work
         // area, putting later options and the 运行/取消 buttons off-screen. The selector area

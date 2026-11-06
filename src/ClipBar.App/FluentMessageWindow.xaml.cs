@@ -131,7 +131,10 @@ public partial class FluentMessageWindow : FluentWindow
         // Same policy as the menus/panel: draw the surface ourselves, so a temporary
         // active/inactive change cannot repaint a system frame over the panel behind it.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
-        NativeMethods.RemoveSystemBorder(hwnd);
+
+        // White-edge fix (same as the tray menu): COLOR_NONE left the frame transparent and
+        // the desktop shone through as a light band. Pin it like the panel does.
+        FrameBorder.Pin(this);
     }
 
     private void Primary_Click(object sender, RoutedEventArgs e)

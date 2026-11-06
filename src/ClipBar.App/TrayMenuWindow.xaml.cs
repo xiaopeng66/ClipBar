@@ -374,7 +374,13 @@ public partial class TrayMenuWindow : FluentWindow
         // drop shadow. On the acrylic panel that shadow read as the panel's border "growing"
         // when a menu opened over it. The menu draws its own 1 DIP rounded border instead.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
-        NativeMethods.RemoveSystemBorder(hwnd);
+
+        // White-edge fix: COLOR_NONE (the old RemoveSystemBorder) left the frame transparent,
+        // so the light taskbar right under the tray menu shone through as a light band — the
+        // panel's original defect. Pin the frame colour like the panel does; FrameBorder also
+        // re-pins it on activation transitions, which repaint the frame with the default
+        // (light) colour.
+        FrameBorder.Pin(this);
     }
 
     /// <summary>

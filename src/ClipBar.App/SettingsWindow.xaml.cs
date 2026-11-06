@@ -5,6 +5,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using ClipBar.App.Platform;
 using ClipBar.App.Services;
 using ClipBar.Core.Extensions;
 using ClipBar.Core.Models;
@@ -37,6 +38,10 @@ public partial class SettingsWindow : FluentWindow
         ExtensionService extensions)
     {
         InitializeComponent();
+        // White-edge fix: without a pinned DWM border colour this window carries the system
+        // frame's default (light, state-dependent) border — the same edge the tray menu showed
+        // over the taskbar. The panel has pinned this colour since its own fix.
+        FrameBorder.Pin(this);
         _settings = settings;
         _save = save;
         _clear = clear;
