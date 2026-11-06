@@ -835,12 +835,13 @@ public partial class MainWindow : FluentWindow
             NativeMethods.GwlExStyle,
             new IntPtr(style | NativeMethods.WsExToolWindow));
 
-        // The panel draws its own rounded border; DWM's non-client frame/shadow is what made
-        // the edge look different whenever the panel lost activation (menus, native dialogs,
-        // keep-open paste). Turning it off makes the border identical in every activation
-        // state, which is exactly what "the panel must not change" requires.
-        NativeMethods.SetNonClientRendering(hwnd, enabled: false);
-        NativeMethods.RemoveSystemBorder(hwnd);
+        // Keep DWM's frame area, but pin its colour to the panel surface: the default border
+        // colour differs between active and inactive windows (the 8px light band that appeared
+        // after right-clicking), while DWMWA_COLOR_NONE made that area transparent and let the
+        // desktop shine through. A fixed colour keeps the frame identical in every state.
+        // Fix the system border colour so an inactive frame cannot turn into a light line; the
+        // acrylic surface stays the window background.
+        NativeMethods.SetBorderColor(hwnd, 0x00202020);
 
         var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
         DpiScale = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
@@ -862,6 +863,7 @@ public partial class MainWindow : FluentWindow
 
     private void Window_Activated(object? sender, EventArgs e)
     {
+        NativeMethods.SetBorderColor(new WindowInteropHelper(this).Handle, 0x00202020);
         // Deliberately no _showCompleted here: activation can happen while the window is still
         // cloaked, and a Deactivated during the transition must not hide a half-shown panel.
     }
@@ -935,6 +937,15 @@ public partial class MainWindow : FluentWindow
                 openMenu.Close();
             }
 
+            // Closing the menu releases its suppression. If the click was outside the panel,
+            // dismiss the panel now: a non-activating menu never changed the foreground, so
+            // there is no Deactivated to rely on.
+            if (!AutoHideSuppressed && !CursorIsOverPanel())
+            {
+                AppLog.Write("Outside click: panel hidden");
+                Hide();
+            }
+
             return;
         }
 
@@ -944,6 +955,7 @@ public partial class MainWindow : FluentWindow
 
     private void Window_Deactivated(object? sender, EventArgs e)
     {
+        NativeMethods.SetBorderColor(new WindowInteropHelper(this).Handle, 0x00202020);
         if (_allowClose || !_showCompleted)
         {
             return;
@@ -990,6 +1002,13 @@ public partial class MainWindow : FluentWindow
         switch (e.Key)
         {
             case Key.Escape:
+                if (_openMenu is { IsVisible: true } openMenu)
+                {
+                    openMenu.Close();
+                    e.Handled = true;
+                    break;
+                }
+
                 Hide();
                 e.Handled = true;
                 break;
@@ -1454,6 +1473,12 @@ public partial class MainWindow : FluentWindow
         if (e.LeftButton != MouseButtonState.Pressed)
         {
             return;
+        }
+
+        if (_openMenu is { IsVisible: true } openMenu)
+        {
+            // The mouse menu does not take activation, so clicking the panel must close it.
+            openMenu.Close();
         }
 
         if (e.OriginalSource is DependencyObject source && IsInteractive(source))

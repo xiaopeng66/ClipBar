@@ -174,14 +174,21 @@ internal static class NativeMethods
     /// menus and dialogs draw their own border; leaving the system one in place is what made
     /// the panel look like it had a white edge.
     /// </summary>
-    public static void RemoveSystemBorder(IntPtr hwnd)
+    public static void RemoveSystemBorder(IntPtr hwnd) => SetBorderColor(hwnd, DwmColorNone);
+
+    /// <summary>
+    /// Pins the system border to one colour. A fixed colour (instead of the active/inactive
+    /// default) keeps the window's frame identical in every activation state; DWMWA_COLOR_NONE
+    /// made the frame transparent, which showed the desktop through it as a light band.
+    /// </summary>
+    public static void SetBorderColor(IntPtr hwnd, uint colorRef)
     {
         if (hwnd == IntPtr.Zero)
         {
             return;
         }
 
-        var color = unchecked((int)DwmColorNone);
+        var color = unchecked((int)colorRef);
         try
         {
             DwmSetWindowAttribute(hwnd, DwmwaBorderColor, ref color, sizeof(int));

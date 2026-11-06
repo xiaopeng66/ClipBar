@@ -26,6 +26,13 @@ public partial class TrayMenuWindow : FluentWindow
     /// </summary>
     public bool FocusFirstRowOnShow { get; set; }
 
+    /// <summary>
+    /// Mouse-opened menus never take activation: the panel stays the active window, so its
+    /// DWM frame/shadow never changes. The menu still receives mouse input; keyboard-invoked
+    /// menus (Shift+F10 / menu key) activate normally so they can own keyboard focus.
+    /// </summary>
+    private bool _noActivate;
+
     // Deactivation fires *during* a close as focus leaves; calling Close() from inside that
     // notification throws "cannot call Close while the window is closing" (measured in the
     // automation harness), so every close trigger checks this flag first.
@@ -232,6 +239,12 @@ public partial class TrayMenuWindow : FluentWindow
             row.Focusable = FocusFirstRowOnShow;
         }
 
+        _noActivate = !FocusFirstRowOnShow;
+        if (_noActivate)
+        {
+            ShowActivated = false;
+        }
+
         // Position and size are final before the first frame; the window is also DWM-cloaked
         // until its content has rendered, so no half-painted frame can be seen. Activation is
         // deferred to after the uncloak (activating a cloaked window does nothing).
@@ -249,6 +262,13 @@ public partial class TrayMenuWindow : FluentWindow
     /// </summary>
     private void OnFirstFrameShown()
     {
+        if (_noActivate)
+        {
+            // Mouse menu: leave the panel active; the menu works without owning the foreground.
+            _interactive = true;
+            return;
+        }
+
         var hwnd = new WindowInteropHelper(this).Handle;
         if (!ForceForeground())
         {
@@ -298,6 +318,11 @@ public partial class TrayMenuWindow : FluentWindow
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         var style = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64();
+        if (_noActivate)
+        {
+            style |= NativeMethods.WsExNoActivate;
+        }
+
         NativeMethods.SetWindowLongPtr(
             hwnd,
             NativeMethods.GwlExStyle,
