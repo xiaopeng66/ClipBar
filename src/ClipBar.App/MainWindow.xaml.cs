@@ -771,6 +771,7 @@ public partial class MainWindow : FluentWindow
         using var scope = SuppressAutoHide();
         try
         {
+            FlashFreeShow.Prepare(window);
             return window.ShowDialog() == true ? window.Result : null;
         }
         finally

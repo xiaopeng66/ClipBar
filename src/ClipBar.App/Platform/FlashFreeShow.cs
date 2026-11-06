@@ -1,0 +1,64 @@
+using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Threading;
+
+namespace ClipBar.App.Platform;
+
+/// <summary>
+/// Removes the "first frame" flicker from transient windows (menus, dialogs, toasts).
+/// A window is shown while DWM-cloaked, so nothing is composited until WPF has laid out and
+/// rendered the real content; the cloak is released right after the first content render (or,
+/// as a fallback, on the next idle turn). This is the technique STranslate uses for its main
+/// window and it is the only reliable way to hide the half-painted frame WPF-UI produces while
+/// it applies the window surface and template.
+/// </summary>
+public static class FlashFreeShow
+{
+    /// <summary>
+    /// Call immediately before <see cref="Window.Show"/> / <see cref="Window.ShowDialog"/>.
+    /// The cloak is installed at <c>SourceInitialized</c> (the HWND does not exist before that)
+    /// and released after the first rendered frame; <paramref name="afterFirstFrame"/> receives
+    /// focus/activation work that must not run while the window is still invisible.
+    /// </summary>
+    public static void Prepare(Window window, Action? afterFirstFrame = null)
+    {
+        var hwnd = IntPtr.Zero;
+        var released = false;
+
+        void Release()
+        {
+            if (released)
+            {
+                return;
+            }
+
+            released = true;
+            if (hwnd != IntPtr.Zero)
+            {
+                NativeMethods.SetWindowCloaked(hwnd, false);
+            }
+
+            afterFirstFrame?.Invoke();
+        }
+
+        void OnSourceInitialized(object? sender, EventArgs e)
+        {
+            window.SourceInitialized -= OnSourceInitialized;
+            hwnd = new WindowInteropHelper(window).Handle;
+            NativeMethods.SetWindowCloaked(hwnd, true);
+        }
+
+        void OnContentRendered(object? sender, EventArgs e)
+        {
+            window.ContentRendered -= OnContentRendered;
+            Release();
+        }
+
+        window.SourceInitialized += OnSourceInitialized;
+        window.ContentRendered += OnContentRendered;
+
+        // Fallback for instances that already rendered once (a re-shown settings window):
+        // ContentRendered will not fire again, and the idle turn still runs after layout.
+        _ = window.Dispatcher.BeginInvoke(new Action(Release), DispatcherPriority.ApplicationIdle);
+    }
+}

@@ -109,3 +109,21 @@
 窗口归属，外部窗口立即隐藏——与 Ditto / PowerToys Run 的做法一致，不再依赖激活语义。抑制期
 （菜单/对话框/保持打开粘贴）钩子放行，由各自生命周期处理；`Deactivated` 与 200 ms 前台看门狗
 保留为无鼠标切换（Alt+Tab）与兜底路径。
+## 8. 窗口首帧闪烁的根除（2026-11-06）
+
+现象：深色主题下右键菜单打开瞬间仍会闪一下；面板唤起同样有半成品帧。
+
+做法（采用 STranslate 的 DWM cloak 技术，见 `src/ClipBar.App/Platform/FlashFreeShow.cs`）：
+
+- 窗口在 `SourceInitialized` 时设置 `DWMWA_CLOAK`，DWM 不合成它，但 WPF 继续布局/渲染；
+- 首帧渲染完成后（`ContentRendered`，兜底为一次 ApplicationIdle）取消 cloak，并执行必须
+  在可见后才做的激活/聚焦；
+- 面板（`MainWindow`）、右键/来源/托盘菜单（`TrayMenuWindow`）、确认/通知/Toast
+  （`FluentMessageWindow`）、扩展选项框（`AppOptionWindow`）、设置窗口均接入。
+
+不采用窗口淡入：实测 `Window.Opacity` 在非透明（Acrylic）窗口上不生效——设为 0.4 会让整窗
+不可见；要做真淡入必须改分层窗口，代价是丢失 Acrylic 背景。Win+V / PowerToys Run / Ditto
+同样是即时出现、不做淡入。
+
+实测：菜单 cloak 安装→释放 25–57ms，菜单 4/4 正常出现（临时调试热键触发，验证后已移除）；
+面板首帧抓帧显示第一可见帧即完整内容。

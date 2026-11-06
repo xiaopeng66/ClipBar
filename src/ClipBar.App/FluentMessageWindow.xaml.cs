@@ -78,6 +78,7 @@ public partial class FluentMessageWindow : FluentWindow
             window.Close();
         };
         window.Loaded += (_, _) => timer.Start();
+        FlashFreeShow.Prepare(window);
         window.Show();
     }
 
@@ -106,6 +107,7 @@ public partial class FluentMessageWindow : FluentWindow
 
         // The panel hides itself on deactivation; keep the dialog owned so the panel
         // does not vanish behind it.
+        FlashFreeShow.Prepare(window);
         if (owner is not null && owner.IsVisible)
         {
             window.Owner = owner;

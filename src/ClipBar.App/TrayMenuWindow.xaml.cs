@@ -216,19 +216,23 @@ public partial class TrayMenuWindow : FluentWindow
             }
         }
 
-        // Position first, then show: the menu must never be visible at a provisional size or
-        // place, otherwise the move/resize itself is the flicker.
+        // Position and size are final before the first frame; the window is also DWM-cloaked
+        // until its content has rendered, so no half-painted frame can be seen. Activation is
+        // deferred to after the uncloak (activating a cloaked window does nothing).
         Left = left;
         Top = top;
-        Show();
-        UpdateLayout();
-
         Topmost = true;
+        FlashFreeShow.Prepare(this, OnFirstFrameShown);
+        Show();
+    }
 
-        // Activation must be verified, not assumed: the right-button-up that follows this call
-        // can hand focus back to the owner, leaving the menu visible but inactive (its DWM
-        // shadow fades and it ignores keys). One retry covers the race; a second failure closes
-        // the menu instead of parking a dead window on screen.
+    /// <summary>
+    /// Runs once the window is uncloaked: verify activation (the right-button-up can hand focus
+    /// back to the owner), then give the first row keyboard focus. A menu that cannot become
+    /// active is closed instead of being left on screen inert.
+    /// </summary>
+    private void OnFirstFrameShown()
+    {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (!ForceForeground())
         {
@@ -237,7 +241,6 @@ public partial class TrayMenuWindow : FluentWindow
 
         _interactive = true;
         var activated = NativeMethods.GetForegroundWindow() == hwnd;
-        AppLog.Write($"Menu shown: activated={activated}, rect={Left:0},{Top:0} {Width:0}x{Height:0}");
         if (!activated)
         {
             AppLog.Write("Menu shown but activation failed; closing instead of leaving it inert");

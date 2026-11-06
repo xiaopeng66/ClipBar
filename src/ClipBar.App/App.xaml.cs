@@ -2,6 +2,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using ClipBar.App.Platform;
 using ClipBar.App.Services;
 using ClipBar.Core.Clipboard;
 using ClipBar.Core.Models;
@@ -165,6 +166,7 @@ public partial class App : Application
             _hotkey = new HotkeyService();
             _hotkey.Pressed += () => ShowPanel("hotkey");
             RegisterConfiguredHotkey();
+
 
             // Reconcile the stored flag with the registry (a cleanup tool can remove the Run
             // entry), but only write when it actually differs: this used to rewrite
@@ -357,8 +359,8 @@ public partial class App : Application
             // the caller went on creating a replacement — an orphaned editor plus a duplicate
             // window. BuildCandidate reads the live settings, so the parked form can neither
             // fake a dirty state nor overwrite geometry that changed while it was hidden.
+            FlashFreeShow.Prepare(parked, () => parked.Activate());
             parked.Show();
-            parked.Activate();
             return;
         }
 
@@ -379,8 +381,8 @@ public partial class App : Application
             }
         };
         _settingsWindow = created;
+        FlashFreeShow.Prepare(created, () => created.Activate());
         created.Show();
-        created.Activate();
     }
 
     private (bool Success, string Message) SaveSettings(AppSettings candidate)
