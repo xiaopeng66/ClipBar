@@ -45,6 +45,19 @@ public sealed class ClipItemViewModel : ObservableObject
 
     public ClipKind Kind => _model.Kind;
 
+    private bool _isMenuAnchor;
+
+    /// <summary>
+    /// True while this row's context menu is open. The menu window sits at the pointer, so the
+    /// row stops being hovered; freezing the hover appearance keeps the panel pixel-identical
+    /// for the whole right-click gesture instead of dropping the highlight under the cursor.
+    /// </summary>
+    public bool IsMenuAnchor
+    {
+        get => _isMenuAnchor;
+        set => SetProperty(ref _isMenuAnchor, value);
+    }
+
     /// <summary>
     /// Observable, unlike a plain pass-through to the model: the card's pin colour is bound to
     /// it, and pinning a row now updates this instance in place instead of replacing it.

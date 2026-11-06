@@ -203,6 +203,11 @@
                                 <Setter TargetName="Card" Property="Background"
                                         Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </Trigger>
+                            <!-- Keep the hover look while this row's menu covers the pointer. -->
+                            <DataTrigger Binding="{Binding IsMenuAnchor}" Value="True">
+                                <Setter TargetName="Card" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </DataTrigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Card" Property="Background"
                                         Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
@@ -398,6 +403,7 @@
                              VirtualizingPanel.VirtualizationMode="Recycling"
                              VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                              ContextMenuOpening="HistoryList_ContextMenuOpening"
+                             PreviewMouseRightButtonDown="HistoryList_PreviewMouseRightButtonDown"
                              PreviewMouseLeftButtonUp="HistoryList_PreviewMouseLeftButtonUp">
                         <ListBox.GroupStyle>
                             <GroupStyle ContainerStyle="{StaticResource HistoryGroupStyle}">

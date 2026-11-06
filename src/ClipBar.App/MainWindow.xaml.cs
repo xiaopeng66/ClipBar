@@ -75,6 +75,8 @@ public partial class MainWindow : FluentWindow
     /// <summary>Incremented on every show; queued geometry saves from the previous hide no-op
     /// when the epoch moved on (R12-F-06).</summary>
     private int _geometryEpoch;
+    private object? _selectionBeforeRightClick;
+    private ClipItemViewModel? _menuAnchorItem;
     private bool _showTransitionActive;
 
     public MainWindow(
@@ -126,6 +128,8 @@ public partial class MainWindow : FluentWindow
             _outsideClickHook?.Dispose();
             _outsideClickHook = null;
             _focusWatchdog.Stop();
+            _menuAnchorItem?.IsMenuAnchor = false;
+            _menuAnchorItem = null;
             if (_showTransitionActive)
             {
                 _showTransitionActive = false;
@@ -1046,6 +1050,22 @@ public partial class MainWindow : FluentWindow
     /// Right-click on the history: offer the extension actions for the row under the pointer.
     /// Left-click paste is untouched — this handler only ever opens a menu.
     /// </summary>
+    /// <summary>
+    /// WPF's ListBoxItem selects itself on right-button-down before any of our handlers run.
+    /// A right-click is only a menu request, so the previous selection is captured here and
+    /// restored when the menu opens — otherwise every right-click repainted the panel (the
+    /// selected card moved to the row under the cursor).
+    /// </summary>
+    private void HistoryList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _selectionBeforeRightClick = HistoryList.SelectedItem;
+
+        // Swallow the down event: ListBoxItem's default handler would select the row right now,
+        // painting the panel before the menu even exists. The menu itself opens from
+        // ContextMenuOpening on right-button-up, which is unaffected.
+        e.Handled = true;
+    }
+
     private void HistoryList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (e.OriginalSource is not DependencyObject source)
@@ -1088,6 +1108,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private TrayMenuWindow OpenClipContextMenu(ClipItemViewModel item, int anchorX, int anchorY, bool fromKeyboard = false)
     {
+        // Undo the right-button-down selection move before the menu appears: the panel must
+        // look identical while the menu is open.
+        if (!fromKeyboard && _selectionBeforeRightClick is { } previous && !ReferenceEquals(previous, HistoryList.SelectedItem))
+        {
+            HistoryList.SelectedItem = previous;
+        }
+
+        _selectionBeforeRightClick = null;
         AppLog.Write($"Clip menu open: clip={item.Id}, kind={item.Kind}, anchor={anchorX},{anchorY}");
         var actions = ViewModel.GetApplicableActions(item);
         var model = item.Model;
@@ -1134,7 +1162,9 @@ public partial class MainWindow : FluentWindow
         var menu = TrayMenuWindow.Create(entries, width: 0);
         menu.Owner = this;
         menu.FocusFirstRowOnShow = fromKeyboard;
-        HistoryList.SelectedItem = item;
+        // No selection change: right-clicking is only a request for the menu. Selecting the row
+        // painted its card lighter (measured 38 -> 47), which read as the panel changing under
+        // the cursor. The menu actions capture the item directly, so selection is not needed.
 
         var lifetime = AttachMenuLifetime(menu);
 
@@ -1200,6 +1230,9 @@ public partial class MainWindow : FluentWindow
         var scope = SuppressAutoHide();
         menu.Closed += (_, _) =>
         {
+            _menuAnchorItem?.IsMenuAnchor = false;
+            _menuAnchorItem = null;
+
             // Dispose first: the deferred dismiss runs at Input priority, after the activation
             // below has settled, so this is still one coherent decision.
             scope.Dispose();
