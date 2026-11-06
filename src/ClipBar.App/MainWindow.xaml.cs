@@ -75,6 +75,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>Incremented on every show; queued geometry saves from the previous hide no-op
     /// when the epoch moved on (R12-F-06).</summary>
     private int _geometryEpoch;
+    private bool _showTransitionActive;
 
     public MainWindow(
         IClipRepository repository,
@@ -125,6 +126,11 @@ public partial class MainWindow : FluentWindow
             _outsideClickHook?.Dispose();
             _outsideClickHook = null;
             _focusWatchdog.Stop();
+            if (_showTransitionActive)
+            {
+                _showTransitionActive = false;
+                NativeMethods.SetWindowCloaked(new WindowInteropHelper(this).Handle, false);
+            }
             // Defer the geometry write off the hide path: a settings flush (fsync) here used to
             // stretch the click-away dismissal by a visible beat. Idle priority runs a moment
             // later, off the critical path; a show in between invalidates it via the epoch.
@@ -255,17 +261,32 @@ public partial class MainWindow : FluentWindow
             // one frame at the previous monitor/position, which reads as the panel ignoring the
             // position setting.
             RestorePlacement(cursor.X, cursor.Y);
+            BeginShowTransition();
             Show();
+            // ApplicationIdle runs after the pending layout/render work has been processed, so
+            // the uncloak exposes a finished frame rather than an empty one.
+            _ = Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    if (IsVisible && !_isClosed)
+                    {
+                        CompleteShowTransition();
+                    }
+                }),
+                DispatcherPriority.ApplicationIdle);
         }
 
         // Guarded: this runs on every panel show, so a failed query must be reported rather than
         // silently leaving the stale list on screen.
         ViewModel.RefreshInBackground();
         Topmost = true;
-        ForceForeground();
+        if (!_showTransitionActive)
+        {
+            // Already visible (second hotkey press): just make sure we own the foreground.
+            CompleteShowTransition();
+        }
+
         _showCompleted = true;
-        SearchBox.Focus();
-        SearchBox.SelectAll();
     }
 
     /// <summary>
@@ -374,6 +395,48 @@ public partial class MainWindow : FluentWindow
         // does not need to guess a scale; size stays in DIPs (it is the WPF Width/Height unit).
         var scale = DpiScale > 0 ? DpiScale : 1.0;
         _noteGeometry?.Invoke(Left * scale, Top * scale, ActualWidth, ActualHeight);
+    }
+
+    /// <summary>
+    /// Hides the window from DWM composition before the first frame. WPF still lays out and
+    /// renders the real content while cloaked, so nothing half-painted can ever be seen. The
+    /// fade-in in <see cref="CompleteShowTransition"/> then makes the appearance deliberate
+    /// instead of a hard pop (and masks the moment WPF-UI attaches the acrylic backdrop).
+    /// </summary>
+    private void BeginShowTransition()
+    {
+        _showTransitionActive = true;
+        NativeMethods.SetWindowCloaked(new WindowInteropHelper(this).Handle, true);
+    }
+
+    /// <summary>
+    /// Uncloaks after the first render pass, then activates and focuses. Activation must wait
+    /// until the window is visible: activating a cloaked window does nothing and would leave the
+    /// panel behind the user's current app.
+    /// </summary>
+    private void CompleteShowTransition()
+    {
+        if (!_showTransitionActive)
+        {
+            ForceForeground();
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            return;
+        }
+
+        _showTransitionActive = false;
+        NativeMethods.SetWindowCloaked(new WindowInteropHelper(this).Handle, false);
+        ForceForeground();
+
+        // No window-level fade: Window.Opacity is a no-op on an opaque (AllowsTransparency=
+        // false) window — measured, setting 0.4 made the whole panel invisible instead of
+        // translucent. An instant, fully-rendered appearance is also what Windows-native
+        // clipboard/palette popups (Win+V, PowerToys Run, Ditto) do; STranslate's visible
+        // animation is a slide of its own window, not a fade. The cloak above is the part
+        // that removes the flicker.
+
+        SearchBox.Focus();
+        SearchBox.SelectAll();
     }
 
     public void HidePanel() => Hide();

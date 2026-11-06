@@ -146,6 +146,37 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern IntPtr WindowFromPoint(Point point);
 
+    // ---- DWM cloaking (flash-free show) ----------------------------------------------
+
+    /// <summary>DWMWA_CLOAK: hides the window from DWM composition without touching WPF.</summary>
+    public const int DwmwaCloak = 13;
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    /// <summary>
+    /// Cloaks/uncloaks a window. While cloaked, DWM composites nothing for it, yet WPF keeps
+    /// laying out and rendering into it — so the first visible frame is already the finished
+    /// content (the technique STranslate and other popup tools use to kill the show flicker).
+    /// </summary>
+    public static void SetWindowCloaked(IntPtr hwnd, bool cloaked)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var value = cloaked ? 1 : 0;
+        try
+        {
+            DwmSetWindowAttribute(hwnd, DwmwaCloak, ref value, sizeof(int));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Pre-Win8 or a stripped-down DWM: the animation simply runs without cloaking.
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct WindowRect
     {
