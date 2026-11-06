@@ -38,6 +38,9 @@ public partial class TrayMenuWindow : FluentWindow
     // automation harness), so every close trigger checks this flag first.
     private bool _closing;
 
+    /// <summary>True once the window started closing; a queued ShowAt must not resurrect it.</summary>
+    public bool IsClosingOrClosed => _closing;
+
     private TrayMenuWindow()
     {
         InitializeComponent();

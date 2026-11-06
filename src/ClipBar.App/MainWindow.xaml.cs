@@ -1228,6 +1228,13 @@ public partial class MainWindow : FluentWindow
             entries.Add(new TrayMenuEntry("暂无适用扩展动作", null));
         }
 
+        // Replace the current menu instead of stacking a new one: with non-activating menus no
+        // Deactivated closes the old window, and the old one's ShowAt may still be queued.
+        if (_openMenu is { } previousMenu)
+        {
+            previousMenu.Close();
+        }
+
         var menu = TrayMenuWindow.Create(entries, width: 0);
         menu.Owner = this;
         menu.FocusFirstRowOnShow = fromKeyboard;
@@ -1245,6 +1252,12 @@ public partial class MainWindow : FluentWindow
             {
                 try
                 {
+                    if (menu.IsClosingOrClosed)
+                    {
+                        lifetime.Dispose();
+                        return;
+                    }
+
                     menu.ShowAt(anchorX, anchorY, aboveCursor: false);
                 }
                 catch
@@ -1374,6 +1387,11 @@ public partial class MainWindow : FluentWindow
             entries.Add(TrayMenuEntry.Item(value, () => ViewModel.SelectedSource = value,
                 bold: ViewModel.SelectedSource == value,
                 icon: ViewModel.SelectedSource == value ? MenuGlyph(SymbolRegular.Checkmark24) : null));
+        }
+
+        if (_openMenu is { } previousSourceMenu)
+        {
+            previousSourceMenu.Close();
         }
 
         var menu = TrayMenuWindow.Create(entries, width: 0);
