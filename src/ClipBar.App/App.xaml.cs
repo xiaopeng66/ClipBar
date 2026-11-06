@@ -362,7 +362,15 @@ public partial class App : Application
             // the caller went on creating a replacement — an orphaned editor plus a duplicate
             // window. BuildCandidate reads the live settings, so the parked form can neither
             // fake a dirty state nor overwrite geometry that changed while it was hidden.
-            FlashFreeShow.Prepare(parked, () => parked.Activate());
+            _mainWindow?.CenterOverPanel(parked);
+            // Reveal the settings window first, then hide the panel underneath: the settings
+            // window covers the panel area, so hiding afterwards can never expose the desktop
+            // (hiding first left a one-frame gap while the new window was still cloaked).
+            FlashFreeShow.Prepare(parked, () =>
+            {
+                parked.Activate();
+                _mainWindow?.HidePanel();
+            });
             parked.Show();
             return;
         }
@@ -384,7 +392,14 @@ public partial class App : Application
             }
         };
         _settingsWindow = created;
-        FlashFreeShow.Prepare(created, () => created.Activate());
+        // Hide the panel in the same frame the settings window becomes visible: hiding it when
+        // settings merely activates leaves a desktop gap while the new window is still cloaked.
+        _mainWindow?.CenterOverPanel(created);
+        FlashFreeShow.Prepare(created, () =>
+        {
+            created.Activate();
+            _mainWindow?.HidePanel();
+        });
         created.Show();
     }
 

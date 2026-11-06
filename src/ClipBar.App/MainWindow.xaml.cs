@@ -455,6 +455,39 @@ public partial class MainWindow : FluentWindow
 
     public void HidePanel() => Hide();
 
+    /// <summary>
+    /// Centres <paramref name="window"/> on the panel's monitor and makes it large enough to
+    /// cover the panel. The settings window appears a couple of frames before the panel's hide
+    /// is composited; covering the panel during that overlap keeps the switch-looking like one
+    /// swap instead of a flash of the old window behind the new one.
+    /// </summary>
+    public void CenterOverPanel(Window window)
+    {
+        var scale = DpiScale > 0 ? DpiScale : 1.0;
+        var point = new NativeMethods.Point((int)(Left * scale), (int)(Top * scale));
+        var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MonitorDefaultToNearest);
+        var info = new NativeMethods.MonitorInfo
+        {
+            Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MonitorInfo>(),
+        };
+
+        if (monitor == IntPtr.Zero || !NativeMethods.GetMonitorInfo(monitor, ref info))
+        {
+            return;
+        }
+
+        var targetScale = NativeMethods.MonitorScale(monitor);
+        var work = info.Work;
+        var width = window.Width > 0 ? window.Width : 560;
+        var height = window.Height > 0 ? window.Height : 660;
+        var (left, top) = PanelPlacement.CenterIn(
+            work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top,
+            width, height, targetScale);
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = left;
+        window.Top = top;
+    }
+
     /// <summary>Nested-safe suppression: a context menu and an options prompt can overlap.</summary>
     private bool AutoHideSuppressed => Volatile.Read(ref _suppressAutoHideDepth) > 0;
 
@@ -1557,6 +1590,9 @@ public partial class MainWindow : FluentWindow
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
+        // Keep the panel visible while the settings window prepares its first frame; it is
+        // hidden by the settings window's reveal callback, not by this activation.
+        using var scope = SuppressAutoHide();
         ViewModel.OpenSettingsCommand.Execute(null);
     }
 

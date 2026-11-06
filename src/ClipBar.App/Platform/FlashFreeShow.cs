@@ -33,6 +33,7 @@ public static class FlashFreeShow
             }
 
             released = true;
+
             if (hwnd != IntPtr.Zero)
             {
                 NativeMethods.SetWindowCloaked(hwnd, false);
