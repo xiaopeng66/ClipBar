@@ -131,6 +131,7 @@ public partial class FluentMessageWindow : FluentWindow
         // Same policy as the menus/panel: draw the surface ourselves, so a temporary
         // active/inactive change cannot repaint a system frame over the panel behind it.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+        NativeMethods.RemoveSystemBorder(hwnd);
     }
 
     private void Primary_Click(object sender, RoutedEventArgs e)

@@ -307,6 +307,7 @@ public partial class TrayMenuWindow : FluentWindow
         // drop shadow. On the acrylic panel that shadow read as the panel's border "growing"
         // when a menu opened over it. The menu draws its own 1 DIP rounded border instead.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+        NativeMethods.RemoveSystemBorder(hwnd);
     }
 
     /// <summary>

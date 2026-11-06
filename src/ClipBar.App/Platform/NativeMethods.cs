@@ -154,6 +154,12 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")]
     public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
+    /// <summary>DWMWA_BORDER_COLOR (Win11): the 1px system border around a window.</summary>
+    public const int DwmwaBorderColor = 34;
+
+    /// <summary>DWMWA_COLOR_NONE: do not draw the system border at all.</summary>
+    public const uint DwmColorNone = 0xFFFFFFFE;
+
     /// <summary>DWMWA_NCRENDERING_POLICY: turns the DWM-drawn frame/shadow on or off.</summary>
     public const int DwmwaNcRenderingPolicy = 2;
 
@@ -162,6 +168,28 @@ internal static class NativeMethods
 
     /// <summary>DWMNCRP_ENABLED.</summary>
     private const int DwncEnabled = 2;
+
+    /// <summary>
+    /// Removes the Win11 system border (a ~1px light hairline on dark windows). The panel,
+    /// menus and dialogs draw their own border; leaving the system one in place is what made
+    /// the panel look like it had a white edge.
+    /// </summary>
+    public static void RemoveSystemBorder(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var color = unchecked((int)DwmColorNone);
+        try
+        {
+            DwmSetWindowAttribute(hwnd, DwmwaBorderColor, ref color, sizeof(int));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+    }
 
     /// <summary>
     /// Enables/disables DWM non-client rendering, i.e. the system frame and drop shadow that

@@ -49,6 +49,13 @@ public static class ThemeService
     /// </summary>
     private static readonly (string Key, Color Color)[] DarkOverrides =
     [
+        // Strokes. WPF-UI's dark defaults render as a bright ~60% white hairline around the
+        // panel ("外面的白边"): a 1 DIP edge at that brightness reads as a white frame on a
+        // dark acrylic surface. Keep them subtle, mirroring the light-theme stroke alpha.
+        ("SurfaceStrokeColorDefaultBrush", Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)),
+        ("DividerStrokeColorDefaultBrush", Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+        ("ControlStrokeColorDefaultBrush", Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)),
+
         ("TextFillColorPrimaryBrush", Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
         ("TextFillColorSecondaryBrush", Color.FromArgb(0xEB, 0xFF, 0xFF, 0xFF)),
         ("TextFillColorTertiaryBrush", Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF)),

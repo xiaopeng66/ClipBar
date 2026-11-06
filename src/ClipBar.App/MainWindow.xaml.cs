@@ -840,6 +840,7 @@ public partial class MainWindow : FluentWindow
         // keep-open paste). Turning it off makes the border identical in every activation
         // state, which is exactly what "the panel must not change" requires.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+        NativeMethods.RemoveSystemBorder(hwnd);
 
         var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
         DpiScale = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
