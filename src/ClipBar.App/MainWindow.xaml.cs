@@ -77,6 +77,8 @@ public partial class MainWindow : FluentWindow
     private int _geometryEpoch;
     private object? _selectionBeforeRightClick;
     private ClipItemViewModel? _menuAnchorItem;
+    private readonly SemaphoreSlim _pasteGate = new(1, 1);
+    private bool _outsideClickDuringSuppression;
     private bool _showTransitionActive;
 
     public MainWindow(
@@ -111,17 +113,8 @@ public partial class MainWindow : FluentWindow
         {
             if (IsVisible)
             {
-                _foreignFocusTicks = 0;
-                _focusWatchdog.Start();
-                // Click-outside dismissal that does not depend on activation semantics (the
-                // Ditto / PowerToys Run approach): a mouse-down on any foreign window hides the
-                // panel instantly, even when that surface never takes the foreground. Menus,
-                // dialogs and keep-open pastes run with the hook parked (see isActive) and keep
-                // their own click-outside lifecycle.
-                _outsideClickHook?.Dispose();
-                _outsideClickHook = OutsideClickHook.Start(
-                    () => IsVisible && !_allowClose && !AutoHideSuppressed,
-                    DismissFromOutsideClick);
+                // Hook/watchdog start in CompleteShowTransition: while the window is still
+                // cloaked/laying out, a foreign foreground or an early click is not a dismissal.
                 return;
             }
 
@@ -257,6 +250,7 @@ public partial class MainWindow : FluentWindow
                 + $"hwnd=0x{_previousForeground.ToInt64():X}, foregroundNow={NativeMethods.GetProcessName(foreground) ?? "unknown"}");
             _showCompleted = false;
             _deactivatedWhileSuppressed = false;
+            _outsideClickDuringSuppression = false;
             // Invalidate any geometry save still queued from the previous hide: it must not run
             // after RestorePlacement and persist the automatic position as a user position
             // (R12-F-06).
@@ -289,8 +283,6 @@ public partial class MainWindow : FluentWindow
             // Already visible (second hotkey press): just make sure we own the foreground.
             CompleteShowTransition();
         }
-
-        _showCompleted = true;
     }
 
     /// <summary>
@@ -425,6 +417,8 @@ public partial class MainWindow : FluentWindow
             ForceForeground();
             SearchBox.Focus();
             SearchBox.SelectAll();
+            _showCompleted = true;
+            _focusWatchdog.Start();
             return;
         }
 
@@ -441,6 +435,15 @@ public partial class MainWindow : FluentWindow
 
         SearchBox.Focus();
         SearchBox.SelectAll();
+
+        // Only now is the panel really interactive: anything earlier is part of showing it.
+        _showCompleted = true;
+        _foreignFocusTicks = 0;
+        _focusWatchdog.Start();
+        _outsideClickHook?.Dispose();
+        _outsideClickHook = OutsideClickHook.Start(
+            () => IsVisible && !_allowClose,
+            DismissFromOutsideClick);
     }
 
     public void HidePanel() => Hide();
@@ -585,6 +588,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async Task PasteItemCore(ClipItem item, bool plainTextOnly)
     {
+        // One paste at a time: two quick clicks used to interleave while awaiting clipboard/
+        // activation, so the first operation could send the second one's clipboard content.
+        await _pasteGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await PasteItemCoreInner(item, plainTextOnly).ConfigureAwait(true);
+        }
+        finally
+        {
+            _pasteGate.Release();
+        }
+    }
+
+    private async Task PasteItemCoreInner(ClipItem item, bool plainTextOnly)
+    {
         var target = _previousForeground;
         var keepOpen = _settings().KeepPanelOpenAfterPaste;
         AppLog.Write(
@@ -593,6 +611,7 @@ public partial class MainWindow : FluentWindow
         IDisposable? scope = null;
         if (keepOpen)
         {
+            _outsideClickDuringSuppression = false;
             scope = SuppressAutoHide();
         }
         else
@@ -646,25 +665,27 @@ public partial class MainWindow : FluentWindow
         {
             if (scope is not null)
             {
-                // Keep-open: hand activation back to the panel so the next click lands on it and
-                // the usual deactivate-to-hide rule still applies when the user moves on.
-                // Activating immediately after the keystroke races the target app: measured with
-                // a browser target, the browser took the foreground back after our Activate() and
-                // the panel was left visible but inactive (so no Deactivated ever arrived and
-                // click-outside did nothing). Let the target settle, then verify the hand-back.
-                var panelHwnd = new WindowInteropHelper(this).Handle;
+                // Keep-open: give the target time to finish handling the keystroke, then hand
+                // focus back once. The old 4-attempt loop made the panel and the target trade
+                // the foreground repeatedly (the "focus flicker" report); one attempt is enough
+                // because the user's next action is a click on the panel, which activates it.
                 await Task.Delay(150).ConfigureAwait(true);
-                for (var attempt = 0; IsVisible && !_allowClose && attempt < 4; attempt++)
-                {
-                    ForceForeground();
-                    await Task.Delay(80).ConfigureAwait(true);
-                    if (NativeMethods.GetForegroundWindow() == panelHwnd)
-                    {
-                        break;
-                    }
-                }
 
-                scope.Dispose();
+                if (_outsideClickDuringSuppression)
+                {
+                    // The user already moved on: do not steal focus back, just dismiss.
+                    scope.Dispose();
+                    Hide();
+                }
+                else
+                {
+                    if (IsVisible && !_allowClose)
+                    {
+                        ForceForeground();
+                    }
+
+                    scope.Dispose();
+                }
             }
         }
     }
@@ -813,6 +834,12 @@ public partial class MainWindow : FluentWindow
             NativeMethods.GwlExStyle,
             new IntPtr(style | NativeMethods.WsExToolWindow));
 
+        // The panel draws its own rounded border; DWM's non-client frame/shadow is what made
+        // the edge look different whenever the panel lost activation (menus, native dialogs,
+        // keep-open paste). Turning it off makes the border identical in every activation
+        // state, which is exactly what "the panel must not change" requires.
+        NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+
         var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
         DpiScale = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
     }
@@ -831,7 +858,11 @@ public partial class MainWindow : FluentWindow
         Hide();
     }
 
-    private void Window_Activated(object? sender, EventArgs e) => _showCompleted = true;
+    private void Window_Activated(object? sender, EventArgs e)
+    {
+        // Deliberately no _showCompleted here: activation can happen while the window is still
+        // cloaked, and a Deactivated during the transition must not hide a half-shown panel.
+    }
 
     /// <summary>
     /// Hides the panel once it has been visible for two watchdog ticks without our process
@@ -883,8 +914,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void DismissFromOutsideClick()
     {
-        if (!IsVisible || _allowClose || AutoHideSuppressed)
+        if (!IsVisible || _allowClose)
         {
+            return;
+        }
+
+        if (AutoHideSuppressed)
+        {
+            // A menu/dialog/keep-open paste is holding the panel. Remember that the user moved
+            // on: the scope decides on release (keep-open cancels its focus hand-back).
+            _outsideClickDuringSuppression = true;
             return;
         }
 

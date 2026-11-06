@@ -55,7 +55,8 @@ public partial class FluentMessageWindow : FluentWindow
         string? actionLabel = null,
         Action? action = null)
     {
-        var window = new FluentMessageWindow { _modal = false, Topmost = false };
+        // Feedback only: never activate, or it steals the foreground from the panel/target.
+        var window = new FluentMessageWindow { _modal = false, Topmost = false, ShowActivated = false };
         window.Glyph.Symbol = symbol;
         window.MessageText.Text = message;
         window.PrimaryButton.Content = actionLabel ?? "确定";
@@ -126,6 +127,10 @@ public partial class FluentMessageWindow : FluentWindow
             hwnd,
             NativeMethods.GwlExStyle,
             new IntPtr(style | NativeMethods.WsExToolWindow));
+
+        // Same policy as the menus/panel: draw the surface ourselves, so a temporary
+        // active/inactive change cannot repaint a system frame over the panel behind it.
+        NativeMethods.SetNonClientRendering(hwnd, enabled: false);
     }
 
     private void Primary_Click(object sender, RoutedEventArgs e)
