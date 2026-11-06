@@ -154,6 +154,37 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")]
     public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
+    /// <summary>DWMWA_NCRENDERING_POLICY: turns the DWM-drawn frame/shadow on or off.</summary>
+    public const int DwmwaNcRenderingPolicy = 2;
+
+    /// <summary>DWMNCRP_DISABLED.</summary>
+    private const int DwncDisabled = 1;
+
+    /// <summary>DWMNCRP_ENABLED.</summary>
+    private const int DwncEnabled = 2;
+
+    /// <summary>
+    /// Enables/disables DWM non-client rendering, i.e. the system frame and drop shadow that
+    /// DWM adds around a top-level window. Popup menus draw their own border, so the extra
+    /// system shadow only made the panel underneath look like it had a thicker border.
+    /// </summary>
+    public static void SetNonClientRendering(IntPtr hwnd, bool enabled)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var value = enabled ? DwncEnabled : DwncDisabled;
+        try
+        {
+            DwmSetWindowAttribute(hwnd, DwmwaNcRenderingPolicy, ref value, sizeof(int));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+    }
+
     /// <summary>
     /// Cloaks/uncloaks a window. While cloaked, DWM composites nothing for it, yet WPF keeps
     /// laying out and rendering into it — so the first visible frame is already the finished

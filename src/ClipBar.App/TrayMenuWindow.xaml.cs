@@ -302,6 +302,11 @@ public partial class TrayMenuWindow : FluentWindow
             hwnd,
             NativeMethods.GwlExStyle,
             new IntPtr(style | NativeMethods.WsExToolWindow));
+
+        // No DWM non-client rendering: a tool menu does not need the extra system frame and
+        // drop shadow. On the acrylic panel that shadow read as the panel's border "growing"
+        // when a menu opened over it. The menu draws its own 1 DIP rounded border instead.
+        NativeMethods.SetNonClientRendering(hwnd, enabled: false);
     }
 
     /// <summary>

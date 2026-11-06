@@ -51,7 +51,26 @@ public static class FlashFreeShow
         void OnContentRendered(object? sender, EventArgs e)
         {
             window.ContentRendered -= OnContentRendered;
-            Release();
+
+            // ContentRendered means WPF finished its own render pass, but DWM may not have
+            // presented that frame yet. Uncloaking immediately occasionally exposed the
+            // window's unpainted surface for one frame (measured: right-click menus flashed
+            // light then dark). Wait for two composited frames before revealing the window.
+            var frames = 0;
+            EventHandler? onRendering = null;
+            onRendering = (_, _) =>
+            {
+                if (++frames < 2)
+                {
+                    return;
+                }
+
+                System.Windows.Media.CompositionTarget.Rendering -= onRendering;
+                Release();
+            };
+            System.Windows.Media.CompositionTarget.Rendering += onRendering;
+
+            // If the window never renders (hidden/closed), the idle fallback still releases.
         }
 
         window.SourceInitialized += OnSourceInitialized;
