@@ -205,6 +205,30 @@ internal static class NativeMethods
     /// <summary>DWMWA_BORDER_COLOR (Win11): the 1px system border around a window.</summary>
     public const int DwmwaBorderColor = 34;
 
+    /// <summary>DWMWA_WINDOW_CORNER_PREFERENCE (Win11): rounding of the window corners.</summary>
+    public const int DwmwaWindowCornerPreference = 33;
+
+    /// <summary>DWMWCP_ROUND: rounded corners matching the system style.</summary>
+    private const int CornerPreferenceRound = 2;
+
+    /// <summary>Rounds the window's corners the way the system draws menus and dialogs.</summary>
+    public static void SetRoundCorners(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var value = CornerPreferenceRound;
+        try
+        {
+            DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref value, sizeof(int));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+    }
+
     /// <summary>DWMWA_COLOR_NONE: do not draw the system border at all.</summary>
     public const uint DwmColorNone = 0xFFFFFFFE;
 

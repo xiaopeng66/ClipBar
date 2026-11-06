@@ -153,4 +153,29 @@ public class FrameBorderTests
         // showed the desktop through as a light band. The pin must never be that value.
         Assert.NotEqual(0xFFFFFFFEu, FrameBorder.Color);
     }
+
+    [Fact]
+    public void TrayMenuIsAPlainWindowSoAMissingThemeDictionaryCannotRestoreTheCaption()
+    {
+        // The user-visible white caption bar over the tray menu happened when the FluentWindow
+        // implicit style (which lives in the Application theme dictionary) failed to resolve
+        // for that instance: no WindowChrome, so DWM painted a native system-themed caption
+        // over the first row. A plain Window with WindowStyle=None has no caption to paint,
+        // whatever the theme dictionaries are doing.
+        RunOnUiThread(async () =>
+        {
+            await Task.Yield();
+            var menu = TrayMenuWindow.Create([TrayMenuEntry.Item("entry", () => { })]);
+            try
+            {
+                Assert.IsNotType<Wpf.Ui.Controls.FluentWindow>(menu);
+                Assert.Equal(WindowStyle.None, menu.WindowStyle);
+                Assert.Equal(ResizeMode.NoResize, menu.ResizeMode);
+            }
+            finally
+            {
+                menu.Close();
+            }
+        });
+    }
 }

@@ -12,8 +12,15 @@ namespace ClipBar.App;
 /// <summary>
 /// Fluent popup used as the tray/clip context menu: a solid-surface window that honours the
 /// monitor DPI, instead of the default WPF ContextMenu popup (flat gray, blurry at 125%+).
+/// Deliberately a plain <see cref="Window"/>, NOT a WPF-UI FluentWindow: the menu is a borderless
+/// WS_EX_TOOLWINDOW popup that draws its whole surface itself, and the FluentWindow chrome came
+/// only from the Application-level theme dictionary — when a menu was created during a theme
+/// dictionary swap, the implicit style resolved to nothing, the WindowChrome never applied, and
+/// DWM painted a native (light, system-themed) caption bar over the first menu row. With
+/// WindowStyle=None on a plain Window there is no caption to paint, so that failure class is
+/// structurally gone.
 /// </summary>
-public partial class TrayMenuWindow : FluentWindow
+public partial class TrayMenuWindow : Window
 {
     private const double ScreenMargin = 6;
 
@@ -374,6 +381,10 @@ public partial class TrayMenuWindow : FluentWindow
         // drop shadow. On the acrylic panel that shadow read as the panel's border "growing"
         // when a menu opened over it. The menu draws its own 1 DIP rounded border instead.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+
+        // The WPF-UI corner-preference attached property went away with FluentWindow; round
+        // the corners directly through DWM so the menu keeps the system silhouette.
+        NativeMethods.SetRoundCorners(hwnd);
 
         // White-edge fix: COLOR_NONE (the old RemoveSystemBorder) left the frame transparent,
         // so the light taskbar right under the tray menu shone through as a light band — the
