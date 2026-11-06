@@ -1033,7 +1033,12 @@ public partial class MainWindow : FluentWindow
                 OpenClipMenuForSelectedItem();
                 e.Handled = true;
                 break;
+            // F10 arrives as a system key in WPF (Key.System + SystemKey), so both forms are
+            // required; the Key.F10 case alone never fired.
             case Key.F10 when Keyboard.Modifiers == ModifierKeys.Shift && ViewModel.SelectedItem is not null:
+            case Key.System when e.SystemKey == Key.F10
+                && Keyboard.Modifiers == ModifierKeys.Shift
+                && ViewModel.SelectedItem is not null:
                 OpenClipMenuForSelectedItem();
                 e.Handled = true;
                 break;
