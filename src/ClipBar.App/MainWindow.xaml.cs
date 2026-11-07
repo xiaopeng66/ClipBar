@@ -257,6 +257,11 @@ public partial class MainWindow : Window
             _showCompleted = false;
             _deactivatedWhileSuppressed = false;
             _outsideClickDuringSuppression = false;
+            // A selection from the previous session (a keep-open paste, or a Down-arrow choose)
+            // would light the card up the moment the panel reappears and read as a stuck hover
+            // state. A fresh show starts with no selection; the Down-arrow path re-selects the
+            // first row on demand.
+            HistoryList.SelectedItem = null;
             // Invalidate any geometry save still queued from the previous hide: it must not run
             // after RestorePlacement and persist the automatic position as a user position
             // (R12-F-06).
@@ -716,6 +721,15 @@ public partial class MainWindow : Window
         }
         finally
         {
+            // The clicked row kept its ListBox selection after the paste, which the user reads
+            // as a stuck hover highlight once the mouse moves away. The paste is done and
+            // nothing needs to stay selected; keyboard users just press Down again to select
+            // the first row.
+            if (IsVisible)
+            {
+                HistoryList.SelectedItem = null;
+            }
+
             if (scope is not null)
             {
                 // Keep-open: give the target time to finish handling the keystroke, then hand
