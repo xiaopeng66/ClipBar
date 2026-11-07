@@ -208,6 +208,19 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Applies a filter chip. The chips are ordinary buttons (same WPF-UI template as the
+    /// settings window), so the selection is a command instead of a ListBox selection.
+    /// </summary>
+    [RelayCommand]
+    private void SelectFilter(FilterOption? option)
+    {
+        if (option is not null)
+        {
+            SelectedFilter = option.Value;
+        }
+    }
+
+    /// <summary>
     /// Starts a refresh nobody awaits, and makes sure its failure is reported instead of
     /// disappearing.
     /// <para>

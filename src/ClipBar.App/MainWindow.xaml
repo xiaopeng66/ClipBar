@@ -374,28 +374,40 @@
                      first filter's border lines up with the search box's left border.
                      One single row of type chips: the source filter moved to the footer's right
                      corner, and the old wide dropdown used to wrap this row on narrow windows. -->
-                <ListBox Grid.Row="1"
-                         Margin="12,2,10,4"
-                         VerticalAlignment="Center"
-                         ItemsSource="{Binding Filters}"
-                         SelectedValue="{Binding SelectedFilter, Mode=TwoWay}"
-                         SelectedValuePath="Value"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         ItemContainerStyle="{StaticResource FilterItemStyle}"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                    <ListBox.ItemsPanel>
+                <ItemsControl Grid.Row="1"
+                              Margin="12,2,10,4"
+                              VerticalAlignment="Center"
+                              ItemsSource="{Binding Filters}">
+                    <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" />
                         </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.ItemTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Label}" />
+                            <!-- WPF-UI's own button template, the same one the settings window
+                                 uses: no hand-drawn stroke, so no theme-coloured edge can land on
+                                 the rounded corners. The active filter is Primary; the rest are
+                                 Subtle pills. -->
+                            <ui:Button Margin="0,0,6,0"
+                                       Height="28"
+                                       Padding="12,0"
+                                       CornerRadius="6"
+                                       FontSize="12"
+                                       Content="{Binding Label}"
+                                       AutomationProperties.Name="{Binding Label}"
+                                       Command="{Binding DataContext.SelectFilterCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                       CommandParameter="{Binding}">
+                                <ui:Button.Appearance>
+                                    <MultiBinding Converter="{StaticResource FilterAppearance}">
+                                        <Binding Path="Value" />
+                                        <Binding Path="DataContext.SelectedFilter" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                    </MultiBinding>
+                                </ui:Button.Appearance>
+                            </ui:Button>
                         </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
                 <!-- History -->
                 <Grid Grid.Row="2">
