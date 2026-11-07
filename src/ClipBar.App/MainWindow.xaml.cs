@@ -265,6 +265,19 @@ public partial class MainWindow : Window
             // one frame at the previous monitor/position, which reads as the panel ignoring the
             // position setting.
             RestorePlacement(cursor.X, cursor.Y);
+            // The acrylic backdrop is DWM state: a sleep/wake cycle or a theme-dictionary swap
+            // can silently drop it, and with the Transparent background the panel would then
+            // render as an empty surface (the user's 文字都看不见了 shape). Re-assert on every
+            // show — this matches the pre-conversion behaviour, where WPF-UI re-applied the
+            // backdrop of every window each time one was shown.
+            try
+            {
+                WindowBackdrop.ApplyBackdrop(this, WindowBackdropType.Acrylic);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Re-apply panel acrylic", ex);
+            }
             BeginShowTransition();
             Show();
             // ApplicationIdle runs after the pending layout/render work has been processed, so
