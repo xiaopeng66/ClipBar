@@ -1,10 +1,9 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.ComponentModel;
 using System.Windows.Data;
 using ClipBar.App.Services;
 using ClipBar.Core.Clipboard;
-using ClipBar.Core.Extensions;
 using ClipBar.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -17,15 +16,9 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Func<AppSettings> _settings;
     private readonly Action<ClipItem> _pasteRequested;
     private readonly Action _settingsRequested;
-    private readonly ExtensionService _extensions;
-    private readonly ExtensionActionRunner _runner;
-    private readonly Func<SnipDoAction, IReadOnlyDictionary<string, string>?> _optionPrompt;
-    private readonly Action<string> _reportError;
-    private readonly Func<string?> _targetProcessName;
     private readonly Action<Exception> _refreshFailed;
     private CancellationTokenSource? _searchCts;
     private int _refreshVersion;
-    private int _extensionRunning;
     private int _refreshFailureReported;
 
     public MainViewModel(
@@ -33,22 +26,12 @@ public sealed partial class MainViewModel : ObservableObject
         Func<AppSettings> settings,
         Action<ClipItem> pasteRequested,
         Action settingsRequested,
-        ExtensionService extensions,
-        ExtensionActionRunner runner,
-        Func<SnipDoAction, IReadOnlyDictionary<string, string>?> optionPrompt,
-        Action<string> reportError,
-        Func<string?> targetProcessName,
         Action<Exception>? refreshFailed = null)
     {
         _repository = repository;
         _settings = settings;
         _pasteRequested = pasteRequested;
         _settingsRequested = settingsRequested;
-        _extensions = extensions;
-        _runner = runner;
-        _optionPrompt = optionPrompt;
-        _reportError = reportError;
-        _targetProcessName = targetProcessName;
         _refreshFailed = refreshFailed ?? (_ => { });
         _hotkeyText = settings().Hotkey;
 
@@ -311,119 +294,8 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// The SnipDo actions that apply to one specific clip — not the mutable selection. The
-    /// right-click menu is built from this, so what it offers is decided by the row the user
-    /// actually right-clicked, and a later selection change cannot change it.
-    /// </summary>
-    public IReadOnlyList<ExtensionActionViewModel> GetApplicableActions(ClipItemViewModel? item)
-    {
-        var model = item?.Model;
-        if (model is null || model.Kind == ClipKind.Image)
-        {
-            return [];
-        }
-
-        _extensions.EnsureLoaded();
-
-        // Actions target the app the clip came from (SnipDo's noShowApps/showOnlyApps semantics).
-        var processName = model.SourceApp;
-        if (string.IsNullOrWhiteSpace(processName))
-        {
-            processName = _targetProcessName();
-        }
-
-        return CollectApplicableActions(_extensions.Extensions, model, processName);
-    }
-
-    /// <summary>Pure matching, so the per-clip filtering is testable without a loaded ExtensionService.</summary>
-    public static IReadOnlyList<ExtensionActionViewModel> CollectApplicableActions(
-        IReadOnlyList<LoadedExtension> extensions,
-        ClipItem model,
-        string? processName)
-    {
-        var context = new ActionContext(model.Text ?? string.Empty, model.FilePaths, processName);
-        var actions = new List<ExtensionActionViewModel>();
-        foreach (var loaded in extensions)
-        {
-            foreach (var action in loaded.Extension.Actions)
-            {
-                if (SnipDoActionMatcher.IsVisible(action, context))
-                {
-                    actions.Add(new ExtensionActionViewModel(loaded, action));
-                }
-            }
-        }
-
-        return actions;
-    }
-
-    /// <summary>Runs an extension action against the clip it was opened for; option-based actions ask the user first.</summary>
-    [RelayCommand]
-    private async Task RunExtensionAsync(ExtensionActionRequest? request)
-    {
-        if (request?.Item is null || request.Action is null)
-        {
-            return;
-        }
-
-        // Extensions are third-party code and some run for seconds. A double-click used to
-        // launch the same action twice, each spawning its own process, so hold a single slot.
-        if (Interlocked.Exchange(ref _extensionRunning, 1) == 1)
-        {
-            // A different action clicked while one is running: dropped silently used to look
-            // like "the menu did nothing" (G-19). One log line is enough — no modal nagging.
-            AppLog.Write($"Extension action '{request.Action.Title}' ignored: another action is still running");
-            return;
-        }
-
-        try
-        {
-            IReadOnlyDictionary<string, string>? appOptions = null;
-            if (request.Action.Action.Options.Count > 0)
-            {
-                try
-                {
-                    appOptions = _optionPrompt(request.Action.Action);
-                }
-                catch (Exception ex)
-                {
-                    // The command is fire-and-forget from the menu click; without this catch a
-                    // prompt failure is an unobserved task and the click silently does nothing
-                    // (G-22, same class as F-41).
-                    _reportError($"{request.Action.Title} 的参数窗口打开失败：{ex.Message}");
-                    return;
-                }
-
-                if (appOptions is null)
-                {
-                    return;
-                }
-            }
-
-            // The clip is captured before the prompt: the request carries the row that was
-            // right-clicked, and neither a prompt nor a refresh may redirect the action.
-            var item = request.Item.Model;
-            var result = await _runner
-                .RunAsync(
-                    request.Action.Action,
-                    item.Text ?? string.Empty,
-                    item.FilePaths,
-                    appOptions,
-                    item.Html,
-                    item.SourceApp)
-                .ConfigureAwait(true);
-
-            if (!result.Success)
-            {
-                _reportError($"{request.Action.Title} 执行失败：{result.Error ?? "未知错误"}");
-            }
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _extensionRunning, 0);
-        }
-    }
+    /// <summary>True when the built-in 用 Bing 搜索 action is enabled in settings.</summary>
+    public bool ShowBingSearch => _settings().ShowBingSearch;
 
     public void UpdateHotkey(string hotkey)
     {
@@ -706,11 +578,3 @@ public sealed partial class MainViewModel : ObservableObject
 }
 
 public sealed record FilterOption(string Label, ClipFilter Value);
-
-/// <summary>
-/// An extension action bound to the exact clip its menu was opened for. Executing from this
-/// snapshot — instead of the live <see cref="MainViewModel.SelectedItem"/> — means a selection
-/// change or a history refresh between the right-click and the click can never redirect the
-/// action to a different clip.
-/// </summary>
-public sealed record ExtensionActionRequest(ClipItemViewModel Item, ExtensionActionViewModel Action);

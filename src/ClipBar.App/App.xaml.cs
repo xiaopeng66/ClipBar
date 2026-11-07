@@ -15,7 +15,10 @@ public partial class App : Application
     private const string MutexName = @"Local\ClipBar.SingleInstance";
     private const string ShowEventName = @"Local\ClipBar.Show";
 
-    /// <summary>Named event the SnipDo paste action signals to open the compact list.</summary>
+    /// <summary>
+    /// Named event a script can signal to open the compact list, so an external launcher does
+    /// not have to spawn a second process. Also reachable as <c>--compact</c>.
+    /// </summary>
     private const string CompactEventName = @"Local\ClipBar.Compact";
 
     private SingleInstanceGuard? _singleInstance;
@@ -23,8 +26,8 @@ public partial class App : Application
     private ShowSignalListener? _showListener;
 
     /// <summary>
-    /// Separate signal for the compact list the SnipDo paste action opens, so the button can
-    /// show the small picker without the full panel appearing.
+    /// Separate signal for the compact list, so a launcher can show the small picker without
+    /// the full panel appearing.
     /// </summary>
     private EventWaitHandle? _compactEvent;
     private ShowSignalListener? _compactListener;
@@ -37,7 +40,6 @@ public partial class App : Application
     private PasteService _pasteService = null!;
     private TrayService _tray = null!;
     private StartupService _startup = null!;
-    private ExtensionService _extensions = null!;
     private MainWindow? _mainWindow;
     private SettingsWindow? _settingsWindow;
 
@@ -72,21 +74,8 @@ public partial class App : Application
             AppLog.Write("Data directory: " + AppPaths.DataDirectory);
         }
 
-        // Headless maintenance: rebuild (and optionally install) the SnipDo plugin from the
-        // same exe, so this path can be scripted without opening any window.
-        if (PluginCommandRunner.IsRequested(e.Args))
-        {
-            Environment.ExitCode = PluginCommandRunner.Run(
-                e.Args,
-                () => new SnipDoPluginExporter(),
-                AppLog.Write,
-                AppLog.Error);
-            Shutdown();
-            return;
-        }
-
-        // A second launch (including the one a SnipDo action starts) only wakes the
-        // running instance; --show is what makes that explicit at the call site.
+        // A second launch only wakes the running instance; --show / --compact are what make
+        // the intent explicit at the call site.
         var showOnStart = e.Args.Any(arg => string.Equals(arg, "--show", StringComparison.OrdinalIgnoreCase));
         var compactOnStart = e.Args.Any(arg => string.Equals(arg, "--compact", StringComparison.OrdinalIgnoreCase));
 
@@ -140,15 +129,10 @@ public partial class App : Application
             _pasteService = new PasteService(_monitor);
             _startup = new StartupService();
 
-            _extensions = new ExtensionService(AppPaths.ExtensionsDirectory, AppLog.Write);
-            _extensions.Reload();
-            AppLog.Write($"已加载 {_extensions.Extensions.Count} 个 SnipDo 扩展");
-
             _mainWindow = new MainWindow(
                 _repository,
                 () => _settings,
                 _pasteService,
-                _extensions,
                 ShowSettings,
                 NotePanelGeometry);
 
@@ -210,7 +194,6 @@ public partial class App : Application
             }
 
             AppLog.Write("ClipBar started");
-            RefreshInstalledSnipDoAction();
 
             if (compactOnStart)
             {
@@ -311,8 +294,9 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Shows the compact clipboard list (the SnipDo paste action): recent rows only, click to
-    /// paste. The full panel stays closed.
+    /// Shows the compact clipboard list: recent rows only, click to paste. The full panel stays
+    /// closed. Reached from <c>--compact</c> and the named event; the floating bar's
+    /// hover-expand builds the same window directly in the coordinator.
     /// </summary>
     private void ShowCompact(string reason)
     {
@@ -340,41 +324,6 @@ public partial class App : Application
         catch (Exception ex)
         {
             AppLog.Error("Show compact", ex);
-        }
-    }
-
-    /// <summary>
-    /// Rewrites the SnipDo paste action when it is already installed. The action is generated
-    /// content (a launcher script plus a manifest), so an upgraded app must not keep a stale
-    /// copy: before this, the SnipDo button kept opening whatever the old script did until the
-    /// user reinstalled it from the settings window. Best-effort: a locked or missing SnipDo
-    /// store just leaves the installed copy alone.
-    /// </summary>
-    private void RefreshInstalledSnipDoAction()
-    {
-        try
-        {
-            if (!SnipDoPluginExporter.IsPasteActionInstalled())
-            {
-                return;
-            }
-
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    new SnipDoPluginExporter().InstallPasteAction();
-                    AppLog.Write("SnipDo paste action refreshed");
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Error("Refresh SnipDo paste action", ex);
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Check SnipDo paste action", ex);
         }
     }
 
@@ -541,8 +490,7 @@ public partial class App : Application
             () => _settings,
             SaveSettings,
             ClearAllHistory,
-            OpenDataFolder,
-            _extensions);
+            OpenDataFolder);
 
         // Only the current window may clear the field: a hidden predecessor closed here used to
         // null out the reference to its replacement (G-11).

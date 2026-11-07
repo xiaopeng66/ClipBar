@@ -1,7 +1,11 @@
 ﻿# GOAL
 
-**目标**：做一个自己用的、仿 Windows 11 Win+V 的剪贴板历史工具，界面要好看、要能长期当主力用，
-并且要能**接管 SnipDo 的剪贴板**（做成 SnipDo 的 paste action，替换它自带的 10 条）。
+**目标**：做一个自己用的、仿 Windows 11 Win+V 的剪贴板历史工具，界面要好看、要能长期当主力用。
+
+> 2026-11-07 方向调整：**不再依赖 SnipDo**。「装进 SnipDo / 从 SnipDo 导入插件」两条路径已整体移除
+> （`ExtensionService`、`ExtensionActionRunner`、`.pbar` 解析与导出、`--export-snipdo`/`--install-snipdo`），
+> 换成自研的原生浮动按钮（Raw Input 手势）+ 三个内置右键动作（纯文本 / 图片另存为 / Bing 搜索）。
+> 下面「已达成」里涉及 SnipDo 的条目是历史记录，保留不改。
 
 ## 已达成
 

@@ -1,10 +1,11 @@
-namespace ClipBar.Core.Security;
+﻿namespace ClipBar.Core.Security;
 
 /// <summary>
-/// Decides which URL schemes a third-party SnipDo action may hand to the shell.
-/// <c>Process.Start(UseShellExecute = true)</c> honours any registered protocol handler, so an
-/// imported package that emits <c>file:///C:/Windows/System32/calc.exe</c>, <c>ms-settings:</c>,
-/// or <c>javascript:</c> would launch arbitrary local programs. Only web/mail schemes pass.
+/// Decides which URL schemes ClipBar may hand to the shell.
+/// <c>Process.Start(UseShellExecute = true)</c> honours any registered protocol handler, so a
+/// URL built from clipboard text could carry <c>file:///C:/Windows/System32/calc.exe</c>,
+/// <c>ms-settings:</c>, or <c>javascript:</c> and launch arbitrary local programs. Only web/mail
+/// schemes pass.
 /// </summary>
 public static class SafeUrl
 {

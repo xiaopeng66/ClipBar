@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,6 +9,7 @@ using ClipBar.App.Services;
 using ClipBar.App.ViewModels;
 using ClipBar.Core.Clipboard;
 using ClipBar.Core.Models;
+using ClipBar.Core.Security;
 using Wpf.Ui.Controls;
 
 namespace ClipBar.App;
@@ -37,7 +39,6 @@ public partial class MainWindow : Window
     private readonly PasteService _pasteService;
     private readonly Func<AppSettings> _settings;
     private readonly Action<double, double, double, double>? _noteGeometry;
-    private readonly ExtensionActionRunner _runner;
     private IntPtr _previousForeground;
     private bool _allowClose;
     private bool _isClosed;
@@ -86,24 +87,17 @@ public partial class MainWindow : Window
         IClipRepository repository,
         Func<AppSettings> settings,
         PasteService pasteService,
-        ExtensionService extensions,
         Action settingsRequested,
         Action<double, double, double, double>? noteGeometry = null)
     {
         InitializeComponent();
         _settings = settings;
         _pasteService = pasteService;
-        _runner = new ExtensionActionRunner(() => _previousForeground);
         ViewModel = new MainViewModel(
             repository,
             settings,
             PasteItem,
             settingsRequested,
-            extensions,
-            _runner,
-            PromptForAppOptions,
-            ReportExtensionError,
-            TargetProcessName,
             ReportRefreshFailure);
         DataContext = ViewModel;
 
@@ -841,13 +835,6 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Process that owned the clipboard when the panel opened, for app-scoped actions.</summary>
-    private string? TargetProcessName()
-    {
-        var hwnd = _previousForeground != IntPtr.Zero ? _previousForeground : NativeMethods.GetForegroundWindow();
-        return NativeMethods.GetProcessName(hwnd);
-    }
-
     private static uint PidOf(IntPtr hwnd)
     {
         NativeMethods.GetWindowThreadProcessId(hwnd, out var processId);
@@ -856,32 +843,6 @@ public partial class MainWindow : Window
 
     /// <summary>This process id: used to refuse self-paste at capture and at send time (G-01).</summary>
     private static uint SelfProcessId => (uint)Environment.ProcessId;
-
-    private IReadOnlyDictionary<string, string>? PromptForAppOptions(SnipDoAction action)
-    {
-        var window = new AppOptionWindow(action, action.Options)
-        {
-            Owner = this,
-        };
-
-        // Deactivation normally hides the panel; keep it visible while the prompt runs.
-        using var scope = SuppressAutoHide();
-        try
-        {
-            FlashFreeShow.Prepare(window);
-            return window.ShowDialog() == true ? window.Result : null;
-        }
-        finally
-        {
-            ForceForeground();
-        }
-    }
-
-    private void ReportExtensionError(string message)
-    {
-        AppLog.Write("Extension action: " + message);
-        NotifyOwned(message, SymbolRegular.Warning24, "扩展动作失败");
-    }
 
     /// <summary>
     /// A panel refresh failed. Logged and told to the user once per failure streak: the list on
@@ -1318,46 +1279,41 @@ public partial class MainWindow : Window
 
         _selectionBeforeRightClick = null;
         AppLog.Write($"Clip menu open: clip={item.Id}, kind={item.Kind}, anchor={anchorX},{anchorY}");
-        var actions = ViewModel.GetApplicableActions(item);
         var model = item.Model;
 
+        // The rows come from a pure builder so the menu contents (including the optional Bing
+        // action) are covered by tests instead of a desktop run.
         var entries = new List<TrayMenuEntry>();
-        var builtIn = model.Kind switch
+        foreach (var row in ClipMenuBuilder.Build(model, _settings()))
         {
-            ClipKind.Text => TrayMenuEntry.Item(
-                "粘贴为纯文本",
-                // Menu rows are Actions: PasteItemCore logs its own failures, so the returned
-                // task is deliberately fire-and-forget.
-                () => { _ = PasteItemCore(model, plainTextOnly: true); },
-                icon: MenuGlyph(SymbolRegular.TextDescription24)),
-            ClipKind.Image => TrayMenuEntry.Item(
-                "图片另存为…",
-                () => SaveImageAs(model),
-                icon: MenuGlyph(SymbolRegular.Save24)),
-            _ => (TrayMenuEntry?)null,
-        };
-
-        if (builtIn is not null)
-        {
-            entries.Add(builtIn);
-            if (actions.Count > 0)
+            switch (row.Kind)
             {
-                entries.Add(TrayMenuEntry.Separator());
+                case ClipMenuActionKind.PasteAsPlainText:
+                    // Menu rows are Actions: PasteItemCore logs its own failures, so the
+                    // returned task is deliberately fire-and-forget.
+                    entries.Add(TrayMenuEntry.Item(
+                        row.Title,
+                        () => { _ = PasteItemCore(model, plainTextOnly: true); },
+                        icon: MenuGlyph(SymbolRegular.TextDescription24)));
+                    break;
+                case ClipMenuActionKind.SaveImageAs:
+                    entries.Add(TrayMenuEntry.Item(
+                        row.Title,
+                        () => SaveImageAs(model),
+                        icon: MenuGlyph(SymbolRegular.Save24)));
+                    break;
+                case ClipMenuActionKind.SearchWithBing:
+                    entries.Add(TrayMenuEntry.Item(
+                        row.Title,
+                        () => SearchWithBing(model.Text ?? string.Empty),
+                        icon: MenuGlyph(SymbolRegular.Search24)));
+                    break;
             }
-        }
-
-        foreach (var action in actions)
-        {
-            var entry = action;
-            entries.Add(TrayMenuEntry.Item(
-                entry.Title,
-                () => ViewModel.RunExtensionCommand.Execute(new ExtensionActionRequest(item, entry)),
-                icon: BuildMenuGlyph(entry)));
         }
 
         if (entries.Count == 0)
         {
-            entries.Add(new TrayMenuEntry("暂无适用扩展动作", null));
+            entries.Add(new TrayMenuEntry("无可用动作", null));
         }
 
         // Replace the current menu instead of stacking a new one: with non-activating menus no
@@ -1562,20 +1518,30 @@ public partial class MainWindow : Window
             DispatcherPriority.Input);
     }
 
-    /// <summary>A 16 DIP glyph: the package icon when it decoded, else a flash placeholder.</summary>
-    private static UIElement BuildMenuGlyph(ExtensionActionViewModel entry)
-        => entry.IconSource is { } source
-            ? new System.Windows.Controls.Image
+    /// <summary>Opens the clip's text as a Bing query in the default browser.</summary>
+    private static void SearchWithBing(string text)
+    {
+        try
+        {
+            // The query is fully escaped, so the result is always an https URL; it still goes
+            // through the scheme allow list because UseShellExecute honours any registered
+            // protocol handler, and this is the one place ClipBar hands data to the shell.
+            var url = SafeUrl.Normalize("https://www.bing.com/search?q=" + Uri.EscapeDataString(text));
+            if (url is null)
             {
-                Source = source,
-                Width = 16,
-                Height = 16,
-                Margin = new Thickness(0, 0, 8, 0),
-                SnapsToDevicePixels = true,
+                AppLog.Write("Bing search refused: the composed URL did not pass the scheme check");
+                return;
             }
-            : MenuGlyph(SymbolRegular.Flash24);
 
-    /// <summary>Built-in menu rows use the same 16 DIP symbol treatment as package icons.</summary>
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Open Bing search", ex);
+        }
+    }
+
+    /// <summary>Built-in menu rows use the same 16 DIP symbol treatment as the tray menu.</summary>
     /// <remarks>
     /// The explicit size keeps the menu's pre-show measurement deterministic: a SymbolIcon's
     /// desired size before the window is loaded can fall back to zero, which would make the

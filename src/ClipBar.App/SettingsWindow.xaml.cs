@@ -7,7 +7,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using ClipBar.App.Platform;
 using ClipBar.App.Services;
-using ClipBar.Core.Extensions;
 using ClipBar.Core.Models;
 using Microsoft.Win32;
 using Wpf.Ui.Controls;
@@ -20,9 +19,6 @@ public partial class SettingsWindow : Window
     private readonly Func<AppSettings, (bool Success, string Message)> _save;
     private readonly Action _clear;
     private readonly Action _openData;
-    private readonly ExtensionService _extensions;
-    private readonly SnipDoPluginExporter _exporter = new();
-    private readonly ObservableCollection<ExtensionRow> _extensionRows = [];
 
     /// <summary>
     /// The settings as they are currently live in the app. The 应用 button is filled exactly while
@@ -34,8 +30,7 @@ public partial class SettingsWindow : Window
         Func<AppSettings> settings,
         Func<AppSettings, (bool Success, string Message)> save,
         Action clear,
-        Action openData,
-        ExtensionService extensions)
+        Action openData)
     {
         InitializeComponent();
         // White-edge fix: without a pinned DWM border colour this window carries the system
@@ -61,12 +56,8 @@ public partial class SettingsWindow : Window
         _save = save;
         _clear = clear;
         _openData = openData;
-        _extensions = extensions;
 
         FillForm(settings().Clone());
-        ExtensionList.ItemsSource = _extensionRows;
-        RefreshExtensions();
-        RefreshPluginStatus();
 
         // Seeded after the form is filled and before the handlers are attached, so the initial
         // population does not count as an edit.
@@ -85,6 +76,7 @@ public partial class SettingsWindow : Window
         ImagePreviewBox.SelectedValue = source.ImagePreview;
         PanelPositionBox.SelectedValue = source.PanelPositionMode;
         PasteOnClickCheck.IsChecked = source.PasteOnClick;
+        BingSearchCheck.IsChecked = source.ShowBingSearch;
         NativeFloatingCheck.IsChecked = source.NativeFloatingEnabled;
         InvokeOnDragCheck.IsChecked = source.InvokeOnDrag;
         HoldDurationBox.Text = source.HoldDurationMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -109,6 +101,8 @@ public partial class SettingsWindow : Window
         ThemeBox.SelectionChanged += OnFormEdited;
         ImagePreviewBox.SelectionChanged += OnFormEdited;
         PanelPositionBox.SelectionChanged += OnFormEdited;
+        BingSearchCheck.Checked += OnFormEdited;
+        BingSearchCheck.Unchecked += OnFormEdited;
         PasteOnClickCheck.Checked += OnFormEdited;
         PasteOnClickCheck.Unchecked += OnFormEdited;
         NativeFloatingCheck.Checked += OnFormEdited;
@@ -198,25 +192,6 @@ public partial class SettingsWindow : Window
     /// the panel opens, and the user should not silently lose track of pending edits (G-11).</summary>
     public bool HasUnappliedEdits => !SameAs(BuildCandidate(), _applied);
 
-    private void RefreshExtensions()
-    {
-        _extensions.Reload();
-        _extensionRows.Clear();
-        foreach (var loaded in _extensions.Extensions)
-        {
-            var extension = loaded.Extension;
-            _extensionRows.Add(new ExtensionRow(
-                extension.Identifier,
-                extension.DisplayName,
-                $"{extension.Identifier} · {extension.Actions.Count} 个动作"));
-        }
-
-        var count = _extensionRows.Count;
-        ExtensionSummary.Text = count == 0 ? "尚未安装扩展" : $"已安装 {count} 个扩展";
-        ExtensionEmpty.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        ExtensionList.Visibility = count == 0 ? Visibility.Collapsed : Visibility.Visible;
-    }
-
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         if (TryApply())
@@ -303,6 +278,7 @@ public partial class SettingsWindow : Window
         {
             candidate.HoldDurationMs = holdMs;
         }
+        candidate.ShowBingSearch = BingSearchCheck.IsChecked == true;
         candidate.PasteOnClick = PasteOnClickCheck.IsChecked == true;
         candidate.KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true;
         candidate.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
@@ -342,186 +318,6 @@ public partial class SettingsWindow : Window
     {
         StatusText.Text = string.Empty;
         StatusText.Visibility = Visibility.Collapsed;
-    }
-
-    private void InstallToSnipDo_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var target = _exporter.InstallPasteAction();
-            RefreshPluginStatus();
-            FluentMessageWindow.Notify(
-                this,
-                "已安装到 SnipDo。\n\n" +
-                "重启 SnipDo 后，在输入框长按鼠标左键，剪贴板栏里的「剪贴板」就会打开 ClipBar 的历史面板。\n\n" +
-                "写入位置：" + target,
-                SymbolRegular.CheckmarkCircle24,
-                "安装完成");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            AppLog.Error("Install SnipDo plugin", ex);
-            FluentMessageWindow.Notify(
-                this,
-                "安装失败：" + ex.Message,
-                SymbolRegular.Warning24,
-                "安装失败");
-        }
-    }
-
-    private void ExportPlugin_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var plugin = _exporter.Export();
-            RefreshPluginStatus();
-            FluentMessageWindow.Notify(
-                this,
-                "已导出扩展包：\n" + plugin.PackagePath +
-                "\n\n在 SnipDo 里用「安装扩展 / Import extension」选中这个 .pbar 即可。",
-                SymbolRegular.CheckmarkCircle24,
-                "导出完成");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            AppLog.Error("Export SnipDo plugin", ex);
-            FluentMessageWindow.Notify(this, "导出失败：" + ex.Message, SymbolRegular.Warning24, "导出失败");
-        }
-    }
-
-    private void OpenPluginDirectory_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Directory.CreateDirectory(_exporter.OutputDirectory);
-            Process.Start(new ProcessStartInfo("explorer.exe", _exporter.OutputDirectory)
-            {
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Open plugin folder", ex);
-        }
-    }
-
-    /// <summary>Reports whether SnipDo's paste-action store already carries our action.</summary>
-    private void RefreshPluginStatus()
-    {
-        PluginStatus.Text = SnipDoPluginExporter.IsPasteActionInstalled()
-            ? "已安装到 SnipDo。改动快捷键或路径后重新点「安装到 SnipDo」刷新脚本，然后重启 SnipDo。"
-            : "尚未安装。点「安装到 SnipDo」会写入 SnipDo 的剪贴板栏；也可以先「导出 .pbar」再在 SnipDo 里导入。";
-    }
-
-    private async void ImportExtension_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog
-        {
-            Title = "选择 SnipDo 扩展包",
-            Filter = "SnipDo 扩展 (*.pbar;*.zip)|*.pbar;*.zip|所有文件 (*.*)|*.*",
-            CheckFileExists = true,
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        try
-        {
-            var loaded = await _extensions.ImportAsync(dialog.FileName);
-            RefreshExtensions();
-            FluentMessageWindow.Notify(
-                this,
-                $"已导入「{loaded.Extension.DisplayName}」，包含 {loaded.Extension.Actions.Count} 个动作。",
-                SymbolRegular.CheckmarkCircle24,
-                "导入完成");
-        }
-        catch (Exception ex)
-        {
-            // Not a narrowed filter: the import touches the user's disk (create the staging dir,
-            // copy entries, delete the staging dir on failure), so UnauthorizedAccessException and
-            // ArgumentException escape any list of "expected" types — and this handler is async
-            // void, so an escape means the user sees no message at all, only a log line. Every
-            // failure here deserves the same sentence, so there is nothing to narrow to.
-            AppLog.Error("Import extension", ex);
-            FluentMessageWindow.Notify(this, "导入失败：" + ex.Message, SymbolRegular.Warning24, "导入失败");
-        }
-    }
-
-    private async void ImportFolder_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "选择 SnipDo 扩展目录",
-            Multiselect = false,
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        try
-        {
-            var loaded = await _extensions.ImportFolderAsync(dialog.FolderName);
-            RefreshExtensions();
-            FluentMessageWindow.Notify(
-                this,
-                $"已导入「{loaded.Extension.DisplayName}」，包含 {loaded.Extension.Actions.Count} 个动作。",
-                SymbolRegular.CheckmarkCircle24,
-                "导入完成");
-        }
-        catch (Exception ex)
-        {
-            // Same reasoning as ImportExtension_Click above.
-            AppLog.Error("Import extension folder", ex);
-            FluentMessageWindow.Notify(this, "导入失败：" + ex.Message, SymbolRegular.Warning24, "导入失败");
-        }
-    }
-
-    private void RemoveExtension_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not ExtensionRow row)
-        {
-            return;
-        }
-
-        if (!FluentMessageWindow.Confirm(
-                this,
-                $"移除扩展「{row.Name}」？",
-                primary: "移除",
-                secondary: "取消"))
-        {
-            return;
-        }
-
-        if (!_extensions.Remove(row.Identifier))
-        {
-            FluentMessageWindow.Notify(
-                this,
-                "移除失败：扩展目录可能被占用。",
-                SymbolRegular.Warning24,
-                "移除失败");
-        }
-
-        RefreshExtensions();
-    }
-
-    private void OpenExtensions_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Directory.CreateDirectory(_extensions.ExtensionsDirectory);
-            Process.Start(new ProcessStartInfo("explorer.exe", _extensions.ExtensionsDirectory)
-            {
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Open extensions folder", ex);
-        }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();

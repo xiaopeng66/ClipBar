@@ -1,6 +1,7 @@
 ﻿# ClipBar
 
-仿 Windows 11 **Win+V** 的剪贴板历史工具，并且可以**作为 SnipDo 的剪贴板插件**（替换 SnipDo 自带的 10 条剪贴板）。
+仿 Windows 11 **Win+V** 的剪贴板历史工具，自带原生浮动按钮：按住左键不动或拖选文字后，指针旁出现
+应用自己的 logo，悬停即展开紧凑列表，点一行就粘回去。不依赖任何第三方工具条。
 
 单文件 exe、纯本地存储、无云同步、无账号。
 
@@ -20,95 +21,26 @@
 - 记录来源应用与时间，列表按“已固定 / 今天 / 昨天 / 更早”分组。
 - 搜索（文本 / 文件名 / 来源应用，命中片段高亮）、类型筛选（全部 / 文本 / 图片 / 文件）；
   来源应用筛选收进底部栏右侧的漏斗按钮，点击选择，选中时按钮右上角有强调色圆点。
-- 右键条目：内置「粘贴为纯文本」（文本条目）或「图片另存为…」（图片条目），
-  其后是导入的 SnipDo 扩展动作；左键点击仍是粘贴。
+- 右键条目：内置「粘贴为纯文本」+「用 Bing 搜索」（文本条目）或「图片另存为…」（图片条目）；
+  Bing 这一项可在设置里关掉。左键点击仍是粘贴。
 - 面板可自由调整大小并记住位置（最小 360×480）；删除后面板内出现 6 秒「撤销」提示条，不需要弹窗。
 - 固定 / 删除按钮统一在每一行的右侧（图片行也一样，不再浮在图片上）。
 - 托盘菜单可「暂停捕获 / 恢复捕获」；设置里可开启「粘贴后保持面板打开」连续粘贴。
 - 键盘：`↑` `↓` 选择，`Enter` 粘贴，`Delete` 删除，`Ctrl+P` 固定，`Ctrl+F` 聚焦搜索，`Esc` 关闭。
 - 默认排除密码管理器（1Password / Bitwarden / KeePass / KeePassXC / Keeper），列表可编辑。
 
-### 作为 SnipDo 的剪贴板插件
+### 原生浮动按钮
 
-SnipDo 的剪贴板栏是一个 **PasteAction**（`BuildInPasteActions\0PasteMain\data.json`），不是扩展。
-所以 ClipBar 反向提供自己的 paste action，把那一格换成「剪贴板」→ 打开本应用的历史面板。
+在设置 → **浮动按钮** 里打开。开启后：
 
-设置 → **把 ClipBar 装进 SnipDo**：
+- **按住左键不动**（默认 600 ms）→ 指针旁出现 ClipBar 的 logo 按钮。
+- **拖选文字后松开** → 同样出现（可在设置里关掉这一条）。
+- **悬停**按钮 → 展开紧凑列表（全部历史，不是固定 12 条），点一行直接粘回刚才的窗口；
+  `Esc`、点面板外、或鼠标移开一会儿自动收起。
+- 点击按钮 → 打开主面板。
 
-| 按钮 | 作用 |
-| --- | --- |
-| **安装到 SnipDo** | 把 paste action 写进 SnipDo 的用户目录 `PasteActions\0ClipBar\`，重启 SnipDo 后生效 |
-| **导出 .pbar** | 只生成插件包到 `%LOCALAPPDATA%\ClipBar\snipdo\ClipBar.pbar`，不写 SnipDo 目录 |
-| **打开插件目录** | 打开上面那个目录 |
-
-目录名 `0ClipBar` 是刻意的：SnipDo 按**文件夹名排序**加载 paste action，`0ClipBar` 排在自带的
-`0PasteMain` 前面，所以栏里第一个就是本应用。
-
-生成的脚本 `main.ps1` 是纯 ASCII（Windows PowerShell 5.1 会把无 BOM 的 UTF-8 当 ANSI 读）。
-它先尝试用命名事件 `Local\ClipBar.Show` 唤醒已经在运行的实例；没有实例时用 `--show` 启动本应用。
-
-同一套动作也可以脱离界面跑（便于脚本化/重装后修复）：
-
-```cmd
-ClipBar.exe --export-snipdo     :: 只重建插件包
-ClipBar.exe --install-snipdo    :: 重建并写进 SnipDo 的 PasteActions
-```
-
-> 改了 exe 路径（比如换了安装位置）或改了快捷键后，重新点一次「安装到 SnipDo」，脚本里的路径才会更新。
-
-### 导入的 SnipDo 扩展（可选）
-
-反过来也支持：设置 → **导入的 SnipDo 扩展** → **导入 .pbar**，把 SnipDo 的插件包装进 ClipBar。
-如果你的扩展是**已经装进 SnipDo 的**（SnipDo 把它存成解包目录，清单文件叫 `data.json`），用 **导入目录** 直接选那个文件夹即可：
-
-```
-%LOCALAPPDATA%\Packages\JohannesTscholl.Pantherbar_3hp4skfxf5x2g\LocalCache\Local\SnipDo\Data\<数字ID>\
-```
-
-导入后在**剪贴板条目上点右键**即可使用这些动作：菜单只显示对这一条记录适用的动作（按 SnipDo 的
-requirements/regex/来源应用规则过滤），左键点击条目仍然是粘贴，两者互不干扰。
-
-支持的动作类型：
-
-| 类型 | 说明 |
-| --- | --- |
-| `url` | 用占位符拼出 URL 并在浏览器打开 |
-| `powershellFile` | 运行插件自带的 `.ps1`，stdout 作为结果 |
-| `pythonFile` | 运行插件自带的 Python 脚本 |
-| `keyCombo` | 发送按键组合（如 `Ctrl+Shift+T`） |
-
-支持的占位符（长、短两种写法都认，真实插件包两种都在用）：
-
-- `{PANTHERBAR_PLAIN_TEXT}` / `{PLAIN_TEXT}` —— 原始文本
-- `{PANTHERBAR_URLENCODED_TEXT}` / `{URLENCODED_TEXT}` —— URL 编码（空格 → `+`）
-- `{PANTHERBAR_URLENCODED_ALT_TEXT}` / `{URLENCODED_ALT_TEXT}` —— URL 编码（空格 → `%20`）
-- `{PANTHERBAR_HTMLENCODED_TEXT}` / `{HTMLENCODED_TEXT}` —— HTML 实体编码
-- `{APPOPTION <id>}` —— 弹出选择框让用户挑一个 `options` 值（只支持带静态取值列表的选项；
-  由脚本实时生成取值的选项不受支持，见下方兼容性边界）
-
-清单里的 `icon_colored`、`monochrome` 字段也会读取：优先用彩色图标，缺失时退回 `icon`，再缺失则用内置闪电图标。
-
-图标支持 `.svg`（真实 SnipDo 包基本都是 svg，24×24）：内置了一个小型矢量渲染器，认得 path / rect / circle / ellipse / line / polyline / polygon、嵌套 `<g>`、`matrix/translate/scale/rotate` 变换、纯色与线性/径向渐变、描边；纯黑单色图标会自动换成中性灰，避免在深色主题下看不见。超出这个子集的图形会被忽略，完全渲染不出来时回退到内置闪电图标。
-
-支持的过滤与行为：
-
-- `requirements`：`HAS_URL` / `IS_URL` / `EMAIL` / `FILEPATH`
-- `regex`：只对匹配的文本出现
-- `showOnlyApps` / `noShowApps`：按前台进程名显示/隐藏
-- `after`：`PASTE_RESULT` / `SHOW_RESULT` / `SHOW_SUCCESS` / `COPY_RESULT`
-
-PowerShell 脚本会收到 `-PLAIN_TEXT`、`-URLENCODED_TEXT`、`-HTMLENCODED_TEXT`、`-URLS`、`-APPOPTION_*` 参数，
-工作目录为插件解压目录，所以脚本旁边放资源文件可直接用相对路径。脚本写 stderr 或非零退出码会被当成失败并弹窗提示。
-
-**兼容性边界**（v1 未实现）：
-
-- 插件图标若是 SVG 里的复杂特性（`<use>`、`<clipPath>`、`<mask>`、滤镜、嵌入位图、CSS 类选择器），这些部分不会绘制，可能只剩部分图形。
-- 不执行插件里的 `.exe` 动作（`file` / `executable` 类型），只跑 `.ps1` / `.py` / `url` / `keyCombo`。
-- `options` 里由脚本实时生成取值的选项（无静态取值列表、带 `powershell_file`）不受支持：声明了这类选项的动作会被**明确拒绝**并提示，不会带着未解析的 `{APPOPTION …}` 占位符照常执行。
-- 不支持 SnipDo 的“选中文本后浮出工具条”交互（那是 SnipDo 自身的壳，我们只做面板内的动作条）。
-- SnipDo 剪贴板按钮的**悬停展开**同样是 SnipDo 原生剪贴板的内置 UI：SnipDo 的工具条是自绘窗口、不暴露
-  任何 UIA 按钮，第三方动作无法感知悬停。ClipBar 的做法是**点击按钮即弹出紧凑列表**（最近 12 条，
-  图标/缩略图 + 来源 + 时间），点任意一行直接粘贴到之前的窗口，Esc 或点外部关闭。
+这条路径只用 ClipBar 自己的窗口和 Raw Input，装不装别的工具条都一样。管理员窗口里的选区
+不响应（UIPI 限制），提权应用的剪贴板也不会被读取。
 
 ## 设置
 
@@ -126,7 +58,7 @@ PowerShell 脚本会收到 `-PLAIN_TEXT`、`-URLENCODED_TEXT`、`-HTMLENCODED_TE
   空间自动选择展开方向）；尺寸始终记忆。旧配置的「跟随鼠标」自动对应到「鼠标所在显示器居中」。
 - **行为**：点击即粘贴、粘贴后保持面板、开机自启、是否记录图片/文件/HTML。
 - **排除的应用**：每行一个进程名。
-- **数据目录**：`%LOCALAPPDATA%\ClipBar\`（`history.db`、`images\`、`settings.json`、`extensions\`、`app.log`）。
+- **数据目录**：`%LOCALAPPDATA%\ClipBar\`（`history.db`、`images\`、`settings.json`、`app.log`）。
 
 托盘菜单：打开剪贴板 / 暂停(恢复)捕获 / 设置 / 清空全部历史 / 退出（分隔线把它们分成三组）。单实例运行，重复启动只会唤出已有窗口。
 托盘右键菜单是独立的实色圆角弹窗（不是 WPF 原生 `ContextMenu`），会按托盘图标所在显示器的 DPI 缩放，
@@ -179,18 +111,17 @@ build.cmd
 dotnet test
 ```
 
-测试分两套：`ClipBar.Core.Tests`（205 例，模型/仓库/搜索/清单解析/安全路径/设置比较与旧预览模式迁移/schema 迁移）和
-`ClipBar.App.Tests`（273 例，热键/面板定位/剪贴板监听/单实例/SVG/扩展执行器/视图模型压力/粘贴结果与目标守卫/刷新失败上报/损坏图片兜底/图片尺寸与三档布局切换/右键扩展动作/跨年日期/审查修复回归），
-共 **478 例**。
+测试分两套：`ClipBar.Core.Tests`（169 例，模型/仓库/搜索/安全路径与 URL/设置比较与旧预览模式迁移/schema 迁移）和
+`ClipBar.App.Tests`（202 例，热键/面板定位/剪贴板监听/单实例/浮动按钮手势状态机/视图模型压力/粘贴结果与目标守卫/刷新失败上报/损坏图片兜底/图片尺寸与三档布局切换/右键菜单构建/跨年日期/审查修复回归），
+共 **371 例**。
 
 ## 安全与稳定性
 
-本项目的威胁模型把**所有外部输入当作不可信**：剪贴板内容、导入的 `.pbar`/`.zip`/`data.json`、
-扩展里的 `.svg` 图标、`settings.json`、清单中的路径字段。
+本项目的威胁模型把**所有外部输入当作不可信**：剪贴板内容、`settings.json`、其中的路径字段。
 
-- **扩展包**：解包前校验条目路径（拒绝 zip-slip 与绝对路径），限制条目数和解压后总大小，
-  防止一个恶意包撑爆磁盘或写到数据目录之外。
-- **扩展执行**：脚本类动作做包含检查、URL 动作限制协议白名单；连点有重入锁，不会并发跑同一个脚本。
+- **不执行外部代码**：真实功能的动作只有三个内置项（粘贴为纯文本、图片另存为、用 Bing 搜索），
+  没有任何脚本/插件执行路径，所以拿到一个恶意剪贴板条目也触发不了进程创建。
+- **URL 白名单**：交给 shell 打开的地址只认 `http`/`https`/`mailto` 等安全协议，见 `SafeUrl`。
 - **剪贴板输入**：文本上限 1 MB（超出截断而非拒绝），文件列表上限 200 条，避免一行撑成几兆。
 - **持久化**：`settings.json` 原子写入；读到一个损坏的配置文件时会把它改名隔离（`.corrupt-*`）并
   回退到默认值（不保留「上一次可用配置」），同时弹提示告知；`app.log` 超过 1 MB 轮转，
@@ -224,8 +155,8 @@ projects/clipbar/
   ClipBar.slnx
   build.cmd
   src/
-    ClipBar.Core/      # 模型、SQLite 仓库、SnipDo 清单解析与匹配（无 UI 依赖）
-    ClipBar.App/       # WPF-UI 界面、剪贴板监听、热键、托盘、扩展执行器
+    ClipBar.Core/      # 模型、SQLite 仓库、搜索、设置与安全校验（无 UI 依赖）
+    ClipBar.App/       # WPF-UI 界面、剪贴板监听、热键、托盘、浮动按钮
   tests/
     ClipBar.Core.Tests # xunit
   dist/ClipBar.exe     # 单文件发布产物（自包含 + 压缩，约 70 MB）

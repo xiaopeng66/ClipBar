@@ -83,23 +83,17 @@ public class ViewModelStressTests
         }
     }
 
-    private static MainViewModel NewViewModel(IClipRepository repository, ExtensionService extensions)
-        => NewViewModel(repository, extensions, _ => { });
+    private static MainViewModel NewViewModel(IClipRepository repository)
+        => NewViewModel(repository, _ => { });
 
     private static MainViewModel NewViewModel(
         IClipRepository repository,
-        ExtensionService extensions,
         Action<Exception> refreshFailed)
         => new(
             repository,
             () => new AppSettings(),
             _ => { },
             () => { },
-            extensions,
-            new ExtensionActionRunner(() => IntPtr.Zero),
-            _ => null,
-            _ => { },
-            () => null,
             refreshFailed);
 
     private static async Task<SqliteClipRepository> NewRepositoryAsync(Workspace workspace)
@@ -108,111 +102,6 @@ public class ViewModelStressTests
         await repository.InitializeAsync();
         return repository;
     }
-
-    /// <summary>Writes a PowerShell action script and returns the action pointing at it.</summary>
-    private static SnipDoAction WriteAction(string scriptDir, string fileName, string body)
-    {
-        Directory.CreateDirectory(scriptDir);
-        File.WriteAllText(Path.Combine(scriptDir, fileName), body, System.Text.Encoding.UTF8);
-        return new SnipDoAction
-        {
-            Title = fileName,
-            PowershellFile = fileName,
-            ScriptRoot = scriptDir,
-        };
-    }
-
-    private static SnipDoExtension NewExtension(SnipDoAction action) => new()
-    {
-        Name = "Stress",
-        Identifier = "stress",
-        Actions = [action],
-    };
-
-    // ---- T-30: double-clicking an extension action -----------------------
-
-    [Fact]
-    public void FiveRapidClicksOnAnExtensionRunTheScriptOnce() => RunOnUiThread(async () =>
-    {
-        using var workspace = new Workspace();
-        var repository = await NewRepositoryAsync(workspace);
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-
-        var scriptDir = Path.Combine(workspace.Root, "ext");
-        var counter = Path.Combine(workspace.Root, "runs.txt");
-
-        // The script records one line per launch and then dawdles, so overlapping calls have a
-        // real window in which to double-spawn a process.
-        var action = WriteAction(
-            scriptDir,
-            "slow.ps1",
-            """
-            param([string]$PLAIN_TEXT)
-            Add-Content -Path $PLAIN_TEXT -Value 'run'
-            Start-Sleep -Milliseconds 250
-            """);
-
-        var vm = NewViewModel(repository, extensions);
-        vm.SelectedItem = new ClipItemViewModel(new ClipItem { Kind = ClipKind.Text, Text = counter });
-        var entry = new ExtensionActionViewModel(new LoadedExtension(NewExtension(action), scriptDir), action);
-
-        // Five clicks, all issued before the first run has finished.
-        var clicks = Enumerable.Range(0, 5)
-            .Select(_ => vm.RunExtensionCommand.ExecuteAsync(new ExtensionActionRequest(vm.SelectedItem!, entry)))
-            .ToArray();
-        await Task.WhenAll(clicks);
-
-        Assert.True(File.Exists(counter), "扩展脚本根本没有执行");
-        var lines = File.ReadAllLines(counter).Where(l => l.Trim().Length > 0).ToArray();
-        Assert.Single(lines);
-    });
-
-    [Fact]
-    public void ASecondRunIsAllowedAfterTheFirstFinishes() => RunOnUiThread(async () =>
-    {
-        using var workspace = new Workspace();
-        var repository = await NewRepositoryAsync(workspace);
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-
-        var scriptDir = Path.Combine(workspace.Root, "ext");
-        var counter = Path.Combine(workspace.Root, "runs.txt");
-        var action = WriteAction(
-            scriptDir,
-            "fast.ps1",
-            """
-            param([string]$PLAIN_TEXT)
-            Add-Content -Path $PLAIN_TEXT -Value 'run'
-            """);
-
-        var vm = NewViewModel(repository, extensions);
-        vm.SelectedItem = new ClipItemViewModel(new ClipItem { Kind = ClipKind.Text, Text = counter });
-        var entry = new ExtensionActionViewModel(new LoadedExtension(NewExtension(action), scriptDir), action);
-
-        // The guard must be released in `finally`, not leaked: a second deliberate click works.
-        await vm.RunExtensionCommand.ExecuteAsync(new ExtensionActionRequest(vm.SelectedItem!, entry));
-        await vm.RunExtensionCommand.ExecuteAsync(new ExtensionActionRequest(vm.SelectedItem!, entry));
-
-        Assert.Equal(2, File.ReadAllLines(counter).Count(l => l.Trim().Length > 0));
-    });
-
-    [Fact]
-    public void ANullRequestDoesNothing() => RunOnUiThread(async () =>
-    {
-        using var workspace = new Workspace();
-        var repository = await NewRepositoryAsync(workspace);
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-        var vm = NewViewModel(repository, extensions);
-
-        var action = new SnipDoAction { Title = "Never", KeyCombo = "^v" };
-        var entry = new ExtensionActionViewModel(
-            new LoadedExtension(NewExtension(action), workspace.Root),
-            action);
-
-        // The clip travels with the request now, so there is no "no selection" state to check —
-        // a missing request must still return immediately instead of sending keystrokes.
-        await vm.RunExtensionCommand.ExecuteAsync(null);
-        await vm.RunExtensionCommand.ExecuteAsync(null);
-    });
 
     // ---- P-0: the query limit must follow MaxItems, not a hardcoded 500 ----
 
@@ -226,12 +115,7 @@ public class ViewModelStressTests
             repository,
             () => settings,
             _ => { },
-            () => { },
-            new ExtensionService(Path.Combine(image.ExtensionDirectory, "extensions")),
-            new ExtensionActionRunner(() => IntPtr.Zero),
-            _ => null,
-            _ => { },
-            () => null);
+            () => { });
 
         await vm.RefreshAsync();
 
@@ -251,12 +135,7 @@ public class ViewModelStressTests
             repository,
             () => new AppSettings(),
             _ => { },
-            () => { },
-            new ExtensionService(Path.Combine(workspace.Root, "extensions")),
-            new ExtensionActionRunner(() => IntPtr.Zero),
-            _ => null,
-            _ => { },
-            () => null);
+            () => { });
 
         await vm.RefreshAsync();
         var item = Assert.Single(vm.Items);
@@ -294,12 +173,7 @@ public class ViewModelStressTests
             repository,
             () => new AppSettings(),
             _ => { },
-            () => { },
-            new ExtensionService(Path.Combine(Path.GetTempPath(), "clipbar-empty-ext-" + Guid.NewGuid().ToString("N")[..6])),
-            new ExtensionActionRunner(() => IntPtr.Zero),
-            _ => null,
-            _ => { },
-            () => null);
+            () => { });
 
         await vm.RefreshAsync();
         vm.SelectedSource = "Msedge";
@@ -314,73 +188,6 @@ public class ViewModelStressTests
 
         Assert.Equal("Msedge", vm.SelectedSource);
         Assert.Contains("Msedge", vm.SourceOptions);
-    });
-
-    // ---- right-click menu: per-clip matching and captured-clip execution ----
-
-    [Fact]
-    public void ApplicableActionsFollowTheRequestedClipNotTheSelection() => RunOnUiThread(async () =>
-    {
-        using var workspace = new Workspace();
-        var repository = await NewRepositoryAsync(workspace);
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-
-        // Regex-init actions come from real packages ("open this URL with Bing"); only a clip
-        // whose text matches may offer it, regardless of what the panel has selected.
-        var action = new SnipDoAction
-        {
-            Title = "Bing",
-            Url = "https://www.bing.com/search?q={URLENCODED_TEXT}",
-            Regex = "bing",
-        };
-        var vm = NewViewModel(repository, extensions);
-        var entry = new ExtensionActionViewModel(new LoadedExtension(NewExtension(action), workspace.Root), action);
-
-        var bing = new ClipItemViewModel(new ClipItem { Id = "bing", Kind = ClipKind.Text, Text = "bing clipbar" });
-        var other = new ClipItemViewModel(new ClipItem { Id = "other", Kind = ClipKind.Text, Text = "nothing to match" });
-        var image = new ClipItemViewModel(new ClipItem { Id = "image", Kind = ClipKind.Image, Text = "bing" });
-        var loaded = new LoadedExtension(NewExtension(action), workspace.Root);
-
-        vm.SelectedItem = other;
-
-        // Matching is per clip: the same panel state offers different actions for different rows,
-        // and images never get any.
-        Assert.Empty(vm.GetApplicableActions(image));
-        Assert.Empty(MainViewModel.CollectApplicableActions([loaded], other.Model, null));
-        var forBing = MainViewModel.CollectApplicableActions([loaded], bing.Model, null);
-        Assert.Single(forBing);
-        Assert.Equal("Bing", forBing[0].Title);
-    });
-
-    [Fact]
-    public void AContextRequestRunsAgainstTheRightClickedClip() => RunOnUiThread(async () =>
-    {
-        using var workspace = new Workspace();
-        var repository = await NewRepositoryAsync(workspace);
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-
-        var scriptDir = Path.Combine(workspace.Root, "ext");
-        var action = WriteAction(
-            scriptDir,
-            "echo.ps1",
-            """
-            param([string]$PLAIN_TEXT)
-            Add-Content -Path $PLAIN_TEXT -Value 'run'
-            """);
-
-        // The clip text doubles as the script's output path, so the run itself proves which clip
-        // the action executed against.
-        var clipA = new ClipItemViewModel(new ClipItem { Kind = ClipKind.Text, Text = Path.Combine(workspace.Root, "from-a.txt") });
-        var clipB = new ClipItemViewModel(new ClipItem { Kind = ClipKind.Text, Text = Path.Combine(workspace.Root, "from-b.txt") });
-        var vm = NewViewModel(repository, extensions);
-        var entry = new ExtensionActionViewModel(new LoadedExtension(NewExtension(action), scriptDir), action);
-        vm.SelectedItem = clipA;
-
-        // The menu was opened on B; moving the selection afterwards must not redirect the run.
-        await vm.RunExtensionCommand.ExecuteAsync(new ExtensionActionRequest(clipB, entry));
-
-        Assert.True(File.Exists(Path.Combine(workspace.Root, "from-b.txt")), "右键的记录没有被执行");
-        Assert.False(File.Exists(Path.Combine(workspace.Root, "from-a.txt")), "动作跑到了选中的另一条记录上");
     });
 
     private sealed class ImagePreviewRepository : IClipRepository
@@ -522,10 +329,9 @@ public class ViewModelStressTests
     {
         using var workspace = new Workspace();
         var repository = new FaultingRepository();
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
 
         var reported = new List<Exception>();
-        var vm = NewViewModel(repository, extensions, reported.Add);
+        var vm = NewViewModel(repository, reported.Add);
 
         // The panel calls this on every show and after every capture. Before the fix the exception
         // was never observed: .NET swallows unobserved task faults (measured), so the list simply
@@ -547,10 +353,9 @@ public class ViewModelStressTests
     {
         using var workspace = new Workspace();
         var repository = new FaultingRepository();
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
 
         var reported = new List<Exception>();
-        var vm = NewViewModel(repository, extensions, reported.Add);
+        var vm = NewViewModel(repository, reported.Add);
 
         // Every keystroke schedules a refresh; a permanently broken database must not produce one
         // log line and one dialog per character typed.
@@ -571,10 +376,9 @@ public class ViewModelStressTests
     {
         using var workspace = new Workspace();
         var repository = new FaultingRepository();
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
 
         var reported = new List<Exception>();
-        var vm = NewViewModel(repository, extensions, reported.Add);
+        var vm = NewViewModel(repository, reported.Add);
 
         vm.RefreshInBackground();
         for (var i = 0; i < 50 && reported.Count == 0; i++)
@@ -604,10 +408,9 @@ public class ViewModelStressTests
     {
         using var workspace = new Workspace();
         var repository = new FaultingRepository();
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
 
         var reported = new List<Exception>();
-        var vm = NewViewModel(repository, extensions, reported.Add);
+        var vm = NewViewModel(repository, reported.Add);
 
         // Typing fast cancels the pending delay; a cancellation is normal, not an error worth a
         // dialog. Only the surviving refresh may report.
@@ -640,8 +443,7 @@ public class ViewModelStressTests
             });
         }
 
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-        var vm = NewViewModel(repository, extensions);
+        var vm = NewViewModel(repository);
 
         // Every keystroke schedules a debounced refresh; each one cancels the previous timer.
         for (var round = 0; round < 10; round++)
@@ -671,8 +473,7 @@ public class ViewModelStressTests
             await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = $"item-{i}" });
         }
 
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-        var vm = NewViewModel(repository, extensions);
+        var vm = NewViewModel(repository);
 
         // A refresh superseded by a newer one must not apply its (older) result set.
         await Task.WhenAll(vm.RefreshAsync(), vm.RefreshAsync());
@@ -691,8 +492,7 @@ public class ViewModelStressTests
         await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = "one" });
         await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = "two" });
 
-        var extensions = new ExtensionService(Path.Combine(workspace.Root, "extensions"));
-        var vm = NewViewModel(repository, extensions);
+        var vm = NewViewModel(repository);
 
         await vm.RefreshAsync();
         var before = vm.Items.ToDictionary(x => x.Id);
@@ -729,7 +529,7 @@ public class ViewModelStressTests
             ImageHeight = 480,
         };
         var repository = new ImagePreviewRepository { Results = [firstModel] };
-        var vm = NewViewModel(repository, new ExtensionService(image.ExtensionDirectory));
+        var vm = NewViewModel(repository);
 
         await vm.RefreshAsync();
         var first = Assert.Single(vm.Items);

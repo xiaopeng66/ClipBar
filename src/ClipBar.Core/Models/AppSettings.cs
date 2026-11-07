@@ -55,7 +55,7 @@ public sealed class AppSettings
 
     /// <summary>
     /// Enables ClipBar's own floating clipboard bar (hold left button over a text field, or drag
-    /// select text) without SnipDo. Off by default: it installs a global input listener.
+    /// select text). Off by default: it installs a global input listener.
     /// </summary>
     public bool NativeFloatingEnabled { get; set; }
 
@@ -73,6 +73,12 @@ public sealed class AppSettings
 
     /// <summary>Also show the bar when a drag selected text (not only on hold).</summary>
     public bool InvokeOnDrag { get; set; } = true;
+
+    /// <summary>
+    /// Show the built-in 用 Bing 搜索 action in a text clip's context menu. Off hides it
+    /// entirely. The search itself is built in.
+    /// </summary>
+    public bool ShowBingSearch { get; set; } = true;
 
     public bool StartWithWindows { get; set; }
 
@@ -107,6 +113,7 @@ public sealed class AppSettings
         PanelTop = PanelTop,
         PanelWidth = PanelWidth,
         PanelHeight = PanelHeight,
+        ShowBingSearch = ShowBingSearch,
         NativeFloatingEnabled = NativeFloatingEnabled,
         HoldDurationMs = HoldDurationMs,
         DragThresholdPx = DragThresholdPx,
@@ -211,6 +218,7 @@ public sealed class AppSettings
             && left.CaptureImages == right.CaptureImages
             && left.CaptureFiles == right.CaptureFiles
             && left.CaptureHtml == right.CaptureHtml
+            && left.ShowBingSearch == right.ShowBingSearch
             && left.NativeFloatingEnabled == right.NativeFloatingEnabled
             && left.InvokeOnDrag == right.InvokeOnDrag
             && left.HoldDurationMs == right.HoldDurationMs

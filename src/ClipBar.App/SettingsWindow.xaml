@@ -192,7 +192,7 @@
                     <TextBlock Text="原生浮动剪贴板"
                                FontWeight="SemiBold"
                                Margin="0,0,0,6" />
-                    <TextBlock Text="按住左键不动或拖选文字后，在指针旁显示 ClipBar 自己的浮动按钮，悬停展开剪贴板列表；不依赖 SnipDo。"
+                    <TextBlock Text="按住左键不动或拖选文字后，在指针旁显示 ClipBar 的浮动按钮，悬停展开剪贴板列表。"
                                TextWrapping="Wrap"
                                Margin="0,0,0,8"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
@@ -229,90 +229,14 @@
                 </StackPanel>
 
                 <StackPanel Style="{StaticResource Section}">
-                    <TextBlock Text="把 ClipBar 装进 SnipDo" Style="{StaticResource SectionTitle}" />
-                    <TextBlock Margin="0,0,0,10"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="在任意输入框里长按鼠标左键，SnipDo 会弹出剪贴板栏；点其中的「剪贴板」直接打开本应用的历史面板，用它替换 SnipDo 自带的 10 条剪贴板。" />
-
-                    <StackPanel Orientation="Horizontal">
-                        <ui:Button Content="安装到 SnipDo" Appearance="Primary" Click="InstallToSnipDo_Click" Margin="0,0,8,0" />
-                        <Button Content="导出 .pbar" Click="ExportPlugin_Click" Margin="0,0,8,0" />
-                        <Button Content="打开导出目录" Click="OpenPluginDirectory_Click" />
-                    </StackPanel>
-
-                    <TextBlock x:Name="PluginStatus"
-                               Margin="0,8,0,0"
+                    <TextBlock Text="右键菜单动作" Style="{StaticResource SectionTitle}" />
+                    <CheckBox x:Name="BingSearchCheck"
+                              Content="显示「用 Bing 搜索」（仅文本条目）"
+                              Margin="0,0,0,6" />
+                    <TextBlock Text="关闭后，右键文本条目不再显示这项。"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                </StackPanel>
-
-                <StackPanel Style="{StaticResource Section}">
-                    <TextBlock Text="导入的 SnipDo 扩展" Style="{StaticResource SectionTitle}" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="ExtensionSummary"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Content="导入 .pbar" Click="ImportExtension_Click" Margin="0,0,8,0" />
-                            <Button Content="导入目录" Click="ImportFolder_Click" Margin="0,0,8,0" />
-                            <Button Content="打开目录" Click="OpenExtensions_Click" />
-                        </StackPanel>
-                    </Grid>
-
-                    <Border Margin="0,10,0,0"
-                            CornerRadius="8"
-                            Background="{DynamicResource ControlFillColorDefaultBrush}"
-                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            Padding="10">
-                        <StackPanel>
-                            <ListBox x:Name="ExtensionList"
-                                     Height="150"
-                                     Background="Transparent"
-                                     BorderThickness="0"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,3">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding Name}"
-                                                           FontSize="13"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding Detail}"
-                                                           FontSize="11"
-                                                           Margin="0,2,0,0"
-                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                            <Button Grid.Column="1"
-                                                    Content="移除"
-                                                    Click="RemoveExtension_Click"
-                                                    VerticalAlignment="Center" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                            <TextBlock x:Name="ExtensionEmpty"
-                                       Text="还没有导入扩展。把 SnipDo 里的 .pbar 包或扩展目录加进来，在面板里右键条目即可使用它们的动作。"
-                                       Margin="0,6,0,0"
-                                       FontSize="11"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                        </StackPanel>
-                    </Border>
-
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

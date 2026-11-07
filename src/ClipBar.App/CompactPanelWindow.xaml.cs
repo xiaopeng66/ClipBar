@@ -16,9 +16,9 @@ using Wpf.Ui.Controls;
 namespace ClipBar.App;
 
 /// <summary>
-/// The compact clipboard list the SnipDo paste action opens: recent clips only — no search, no
+/// The compact clipboard list the floating bar opens on hover: recent clips only — no search, no
 /// filters, no footer actions — anchored next to the pointer. Clicking a row pastes it into the
-/// window that was in front when the list appeared, which is what SnipDo's own clipboard view
+/// window that was in front when the list appeared, which is what the system clipboard view
 /// does. It is deliberately a plain Window with its own surface (same as the other popups), so
 /// a missing theme dictionary cannot paint a native caption over it.
 /// </summary>
@@ -78,13 +78,13 @@ public partial class CompactPanelWindow : Window
     public async Task ShowAtCursorAsync()
     {
         // Capture the paste target BEFORE we are shown: once this window is up it owns the
-        // foreground, and the clip must land in the app SnipDo was invoked from.
+        // foreground, and the clip must land in the app the user came from.
         var foreground = NativeMethods.GetForegroundWindow();
         var target = foreground;
         if (!PasteTarget.WorthCapturing(foreground, SelfProcessId, PidOf))
         {
-            // The SnipDo toolbar itself is often the foreground; fall back to the previous
-            // window of this app's own tracking when that happens.
+            // A launcher window can be the foreground; fall back to the previous window this
+            // app tracked when that happens.
             target = _lastKnownTarget;
         }
 
@@ -103,7 +103,7 @@ public partial class CompactPanelWindow : Window
         _anchor = anchor;
         _managedByCoordinator = true;
 
-        // Activated on show, like the SnipDo-path list: a WS_EX_NOACTIVATE list received the
+        // Activated on show: a WS_EX_NOACTIVATE list received the
         // click but the follow-up Ctrl+V did not land in the target's focused control, while
         // PasteService's re-activation of the captured target makes the activated variant paste
         // correctly (verified end to end).
@@ -123,7 +123,7 @@ public partial class CompactPanelWindow : Window
         _noActivate = noActivate;
 
         // The floating bar prefetches the rows while the pointer is still travelling, so opening
-        // the list is a render, not a query + render. The SnipDo path passes null and queries here.
+        // the list is a render, not a query + render. Other callers pass null and query here.
         var rows = preloaded;
         if (rows is null)
         {
@@ -224,10 +224,10 @@ public partial class CompactPanelWindow : Window
         Top = Math.Max(work.Top + ScreenMargin, top);
     }
 
-    /// <summary>The last non-self window this app pasted into, for targets like SnipDo's toolbar.</summary>
+    /// <summary>The last non-self window this app pasted into, for targets like a launcher bar.</summary>
     private static IntPtr _lastKnownTarget;
 
-    /// <summary>Records the target so a SnipDo-invoked list can fall back to it.</summary>
+    /// <summary>Records the target so a later list can fall back to it.</summary>
     public static void RememberTarget(IntPtr hwnd)
     {
         if (hwnd != IntPtr.Zero)

@@ -28,8 +28,8 @@ public static class AppPaths
 
     /// <summary>
     /// Suffix for the single-instance mutex and show-event names: empty for the default location
-    /// (SnipDo's launcher relies on the plain names), a short stable hash for custom directories so
-    /// two portable copies can run side by side.
+    /// (external launchers rely on the plain names), a short stable hash for custom directories
+    /// so two portable copies can run side by side.
     /// </summary>
     public static string InstanceSuffix { get; private set; } = string.Empty;
 
@@ -113,8 +113,6 @@ public static class AppPaths
 
     public static string SettingsPath => Path.Combine(DataDirectory, "settings.json");
 
-    public static string ExtensionsDirectory => Path.Combine(DataDirectory, "extensions");
-
     public static string LogPath => Path.Combine(DataDirectory, "app.log");
 
     public static void EnsureCreated()
@@ -122,7 +120,6 @@ public static class AppPaths
         MigrateLegacyDataDirectory();
         Directory.CreateDirectory(DataDirectory);
         Directory.CreateDirectory(ImagesDirectory);
-        Directory.CreateDirectory(ExtensionsDirectory);
     }
 
     private static void MigrateLegacyDataDirectory()
@@ -137,8 +134,8 @@ public static class AppPaths
         try
         {
             // Same volume: the move is instant and keeps every file (db, settings, images,
-            // extensions, log, SnipDo export). Nothing is deleted — if the move fails the
-            // original stays untouched and ClipBar simply starts fresh.
+            // log, plus any leftovers from an older build). Nothing is deleted — if the move
+            // fails the original stays untouched and ClipBar simply starts fresh.
             Directory.Move(LegacyDataDirectory, DataDirectory);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
