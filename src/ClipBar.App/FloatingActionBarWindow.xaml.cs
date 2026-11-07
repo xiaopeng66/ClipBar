@@ -16,33 +16,14 @@ public partial class FloatingActionBarWindow : Window
 {
     private const double ScreenMargin = 6;
 
-    private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private bool _expanded;
     private bool _closing;
 
     public FloatingActionBarWindow()
     {
         InitializeComponent();
-        _hoverTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(200),
-        };
-        _hoverTimer.Tick += (_, _) =>
-        {
-            _hoverTimer.Stop();
-            if (!_closing && ClipboardButton.IsMouseOver)
-            {
-                RequestClipboard();
-            }
-        };
-
         SourceInitialized += (_, _) => ApplyToolWindowStyle();
-        NonActivatingWindow.Attach(this);
-        Closed += (_, _) =>
-        {
-            _closing = true;
-            _hoverTimer.Stop();
-        };
+        Closed += (_, _) => _closing = true;
     }
 
     /// <summary>Raised when the user wants the clipboard list (hover dwell or click).</summary>
@@ -55,12 +36,8 @@ public partial class FloatingActionBarWindow : Window
         set => _expanded = value;
     }
 
-    /// <summary>Hover dwell before the list expands; wired from settings.</summary>
-    public int HoverExpandMs
-    {
-        get => (int)_hoverTimer.Interval.TotalMilliseconds;
-        set => _hoverTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(value, 0, 2000));
-    }
+    /// <summary>Hover dwell before the list expands; the coordinator polls the pointer.</summary>
+    public int HoverExpandMs { get; set; } = 200;
 
     /// <summary>True when the pointer is over the bar itself.</summary>
     public bool IsPointerOver => IsMouseOver;
@@ -73,20 +50,11 @@ public partial class FloatingActionBarWindow : Window
         var scale = NativeMethods.MonitorScale(monitor);
         var work = WorkArea(monitor, scale);
 
-        // Measure before the first frame so placement uses the real size (the panel did the same
-        // for its menus: sizing after Show painted one wrong frame).
-        if (Content is FrameworkElement root)
-        {
-            root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            if (root.DesiredSize.Width > 0)
-            {
-                Width = Math.Ceiling(root.DesiredSize.Width);
-                Height = Math.Ceiling(root.DesiredSize.Height);
-            }
-        }
-
-        var width = double.IsNaN(Width) ? 64 : Width;
-        var height = double.IsNaN(Height) ? 40 : Height;
+        // Fixed DIP size: measuring the content produced a bar that shrank or grew with the
+        // window DPI (27x25 DIP at 200%), which left a much smaller target than SnipDo's 40 DIP
+        // bar. A constant size keeps the hit area and the look identical on every monitor.
+        var width = double.IsNaN(Width) ? 46 : Width;
+        var height = double.IsNaN(Height) ? 42 : Height;
         var anchorX = screenPoint.X / scale;
         var anchorY = screenPoint.Y / scale;
 
@@ -113,16 +81,33 @@ public partial class FloatingActionBarWindow : Window
         ClipboardRequested?.Invoke(this);
     }
 
-    private void ClipboardButton_MouseEnter(object sender, MouseEventArgs e)
+    /// <summary>True when the pointer is over the clipboard button (polled by the coordinator).</summary>
+    public bool IsPointerOverButton
     {
-        if (!_closing && !_expanded)
+        get
         {
-            _hoverTimer.Stop();
-            _hoverTimer.Start();
+            if (!IsVisible || _closing)
+            {
+                return false;
+            }
+
+            if (!NativeMethods.GetCursorPos(out var cursor))
+            {
+                return false;
+            }
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero || !NativeMethods.GetWindowRect(hwnd, out var rect))
+            {
+                return false;
+            }
+
+            // The button is the window minus the 4 DIP padding on each side; at the 46x42 DIP
+            // size that is the whole interior, so the window rect is a good enough hit area.
+            return cursor.X >= rect.Left && cursor.X < rect.Right
+                && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
         }
     }
-
-    private void ClipboardButton_MouseLeave(object sender, MouseEventArgs e) => _hoverTimer.Stop();
 
     private void ClipboardButton_Click(object sender, RoutedEventArgs e) => RequestClipboard();
 
@@ -151,10 +136,13 @@ public partial class FloatingActionBarWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         var style = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64();
+        // WS_EX_NOACTIVATE (plus MA_NOACTIVATE) made the bar swallow its own clicks: the
+        // hover path worked but pressing the button did nothing. ShowActivated=false already
+        // keeps the caret in the target until the user actually clicks the bar.
         NativeMethods.SetWindowLongPtr(
             hwnd,
             NativeMethods.GwlExStyle,
-            new IntPtr(style | NativeMethods.WsExToolWindow | NativeMethods.WsExNoActivate));
+            new IntPtr(style | NativeMethods.WsExToolWindow));
 
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
         NativeMethods.SetRoundCorners(hwnd);

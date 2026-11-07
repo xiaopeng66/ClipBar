@@ -40,6 +40,7 @@ public sealed class FloatingBarCoordinator : IDisposable
     private IntPtr _target;
     private bool _barShownAtHold;
     private long _pointerLeftAtMs;
+    private long _pointerOverButtonSinceMs;
     private bool _disposed;
 
     public FloatingBarCoordinator(
@@ -287,8 +288,21 @@ public sealed class FloatingBarCoordinator : IDisposable
 
         _list = list;
         bar.IsExpanded = true;
-        _ = list.ShowBelowAsync(bar, _target);
-        AppLog.Write("Floating bar: compact list opened");
+        _ = ShowListAsync(list, bar);
+    }
+
+    private async Task ShowListAsync(CompactPanelWindow list, FloatingActionBarWindow bar)
+    {
+        try
+        {
+            await list.ShowBelowAsync(bar, _target).ConfigureAwait(true);
+            AppLog.Write($"Floating bar: compact list shown (visible={list.IsVisible}, {list.ActualWidth:0}x{list.ActualHeight:0})");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Show floating list", ex);
+            CloseList();
+        }
     }
 
     private void InstallOutsideClickHook()
@@ -343,6 +357,30 @@ public sealed class FloatingBarCoordinator : IDisposable
         if (overBar || overList)
         {
             _pointerLeftAtMs = 0;
+        }
+
+        // Hover-to-expand is polled rather than driven by WPF MouseEnter: these windows can be
+        // shown under a stationary pointer (no enter event) and a non-activating window does not
+        // reliably route mouse messages. Polling the cursor is deterministic.
+        if (_bar is { IsExpanded: false } bar && bar.IsPointerOverButton)
+        {
+            if (_pointerOverButtonSinceMs == 0)
+            {
+                _pointerOverButtonSinceMs = _clock.ElapsedMilliseconds;
+            }
+            else if (_clock.ElapsedMilliseconds - _pointerOverButtonSinceMs >= Math.Max(0, _settings().HoverExpandMs))
+            {
+                _pointerOverButtonSinceMs = 0;
+                OnClipboardRequested(bar);
+            }
+        }
+        else
+        {
+            _pointerOverButtonSinceMs = 0;
+        }
+
+        if (overBar || overList)
+        {
             return;
         }
 
@@ -446,6 +484,7 @@ public sealed class FloatingBarCoordinator : IDisposable
         CloseList();
         _autoHideTimer.Stop();
         _pointerLeftAtMs = 0;
+        _pointerOverButtonSinceMs = 0;
 
         if (_bar is { } bar)
         {

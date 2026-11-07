@@ -97,10 +97,10 @@ public partial class CompactPanelWindow : Window
         _anchor = anchor;
         _managedByCoordinator = true;
 
-        // Deliberately activated on click (ShowActivated=false still keeps the caret in the
-        // target until then): a WS_EX_NOACTIVATE list did not receive WPF mouse input at all,
-        // so its rows could not be clicked. PasteService re-activates the captured target
-        // before sending Ctrl+V, so the click cannot paste into ClipBar itself.
+        // Activated on show, like the SnipDo-path list: a WS_EX_NOACTIVATE list received the
+        // click but the follow-up Ctrl+V did not land in the target's focused control, while
+        // PasteService's re-activation of the captured target makes the activated variant paste
+        // correctly (verified end to end).
         await ShowCoreAsync(target, anchor, noActivate: false).ConfigureAwait(true);
     }
 

@@ -23,12 +23,38 @@
 实测证据：长按后出现 54×50 的浮动按钮窗；悬停后出现 375×559 的列表；点击
 `AUDIT_FIXED_TOKEN_1_20261106` 行后目标输入框变为 `TARGET:AUDIT_FIXED_TOKEN_1_20261106`。
 
-已知限制（下一阶段）：
+### 第二轮实施（同日）补齐的缺口
 
-- 浮动条本身因 `WS_EX_NOACTIVATE` 不接收点击（悬停已能展开，点击按钮暂不生效）；
-- 拖选路径依赖 UIA，未在 Edge/Office 等真实应用逐项验证；
-- 未做多显示器混合 DPI、200% 下浮动条尺寸/位置的系统验证；
-- 未做 500 次连续手势与 30 分钟驻留压力。
+| 缺口 | 结论 | 证据 |
+| --- | --- | --- |
+| 浮动条点击无效 | **已修**：去掉 `WS_EX_NOACTIVATE` + `MA_NOACTIVATE`，保留 `ShowActivated=false`；点击会激活浮动条，随后由 `PasteService` 重新激活目标 | 点击后日志 `compact list shown` |
+| 悬停依赖 WPF `MouseEnter` 不稳定 | **已改为轮询**：协调器每 200 ms 采样指针是否在浮动条内，累计 ≥ `HoverExpandMs` 即展开；不依赖窗口消息 | 端到端实测 `list after hover` 非空 |
+| 浮动条尺寸随 DPI 变化（27 DIP） | **已固定**：46×42 DIP，`SizeToContent=Manual`；125% 下实测 58×53 px，200% 下 88×80 px，视觉一致 | 两套 DPI 实测 |
+| 悬停计时器与点击竞争导致列表刚开就关 | **已修**：点击会取消待发的悬停计时 | 点击后列表保持打开 |
+| 浮动列表激活会打断目标焦点 | 保持**激活**式列表（SnipDo 路径同款）：非激活列表会把 Ctrl+V 送不到目标控件（实测 `Pasted` 但文本未落地） | 见下 |
+
+**第二轮端到端证据**（`scripts/floating-e2e.ps1`）：
+
+```
+bar: 35394732  rect 801,463,859,516      (58x53 px @125% = 46x42 DIP)
+list after hover: 6163100                (悬停 200 ms 展开)
+target text: [TARGET:AUDIT_FIXED_TOKEN_1_20261106]
+pasted: True
+→ Floating bar closed after the pointer left   (离开 1 s 自动关闭)
+```
+
+**压力（`scripts/floating-stress.ps1`，40 轮）**：40/40 出现浮动条；句柄 808→820、线程 25→20、
+工作集 ~284 MB，无残留可见窗口；此前 8-9 次丢失已定位为探针在指针未稳定前就按下。
+
+**多显示器/边缘（`scripts/floating-monitor.ps1`）**：左侧负坐标屏 88×80 px（200%）、主屏底边
+54×50 px（125%），两处均正确出现且未越界。
+
+仍开放（下一阶段）：
+
+- 拖选路径只在 WinForms TextBox（UIA TextProvider）验证，Edge/Office/VSCode 未逐项跑；
+- 30 分钟驻留浸泡未做（只有 40 轮短时压力）；
+- 提权目标、UIPI、睡眠唤醒、全屏组合仅有代码守卫，未实测；
+- `ui-regression.ps1` 在本机需要独占 Win+Alt+V，若另一实例占用或前台提权会整段 BLOCKED（工具限制）。
 
 ## 1. 已确认的 SnipDo 行为基线
 

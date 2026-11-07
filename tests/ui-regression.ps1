@@ -203,7 +203,12 @@ if ($null -eq $panel) {
     $selIdle = SelectionFlags
     $rows = Rows
     Check 'history rows visible through UIA' ($rows.Count -gt 0) ("rows=" + $rows.Count)
-    $r = $rows | Where-Object { ($_.Current.BoundingRectangle.Height -le 90) } | Select-Object -First 1
+    # Prefer a known text row by name; a tall image preview can otherwise make the height
+    # heuristic miss every row and the whole section report BLOCKED.
+    $r = $rows | Where-Object { $_.Current.Name -match 'regress text' } | Select-Object -First 1
+    if ($null -eq $r) {
+        $r = $rows | Where-Object { ($_.Current.BoundingRectangle.Height -le 90) } | Select-Object -First 1
+    }
     if ($null -eq $r) {
         Block 'right-click invariants' 'no text row found'
     } else {
