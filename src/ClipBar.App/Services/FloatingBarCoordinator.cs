@@ -41,6 +41,13 @@ public sealed class FloatingBarCoordinator : IDisposable
     private bool _barShownAtHold;
     private long _pointerLeftAtMs;
     private long _pointerOverButtonSinceMs;
+
+    /// <summary>
+    /// Rows fetched while the bar is on screen, so the hover expand is a render instead of a
+    /// query. Cancelled with the bar.
+    /// </summary>
+    private Task<IReadOnlyList<ClipItem>>? _prefetch;
+
     private bool _disposed;
 
     public FloatingBarCoordinator(
@@ -62,9 +69,11 @@ public sealed class FloatingBarCoordinator : IDisposable
         };
         _gestureTimer.Tick += (_, _) => OnGestureTick();
 
+        // 100 ms: the hover dwell itself is 200 ms, so a coarse tick added a visible extra
+        // delay before the list opened.
         _autoHideTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(200),
+            Interval = TimeSpan.FromMilliseconds(100),
         };
         _autoHideTimer.Tick += (_, _) => OnAutoHideTick();
     }
@@ -256,6 +265,7 @@ public sealed class FloatingBarCoordinator : IDisposable
 
         _bar = bar;
         _barShownAtHold = fromHold;
+        _prefetch = PrefetchRowsAsync();
         _pointerLeftAtMs = 0;
         bar.ShowAt(point);
         InstallOutsideClickHook();
@@ -291,11 +301,33 @@ public sealed class FloatingBarCoordinator : IDisposable
         _ = ShowListAsync(list, bar);
     }
 
+    /// <summary>Warms the row list while the pointer travels to the bar.</summary>
+    private async Task<IReadOnlyList<ClipItem>> PrefetchRowsAsync()
+    {
+        var limit = Math.Clamp(_settings().MaxItems, 10, 5000);
+        return await _repository
+            .QueryAsync(ClipFilter.All, search: null, limit: limit)
+            .ConfigureAwait(true);
+    }
+
     private async Task ShowListAsync(CompactPanelWindow list, FloatingActionBarWindow bar)
     {
         try
         {
-            await list.ShowBelowAsync(bar, _target).ConfigureAwait(true);
+            IReadOnlyList<ClipItem>? rows = null;
+            if (_prefetch is { } prefetch)
+            {
+                try
+                {
+                    rows = await prefetch.ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Prefetch floating rows", ex);
+                }
+            }
+
+            await list.ShowBelowAsync(bar, _target, rows).ConfigureAwait(true);
             AppLog.Write($"Floating bar: compact list shown (visible={list.IsVisible}, {list.ActualWidth:0}x{list.ActualHeight:0})");
         }
         catch (Exception ex)
@@ -485,6 +517,7 @@ public sealed class FloatingBarCoordinator : IDisposable
         _autoHideTimer.Stop();
         _pointerLeftAtMs = 0;
         _pointerOverButtonSinceMs = 0;
+        _prefetch = null;
 
         if (_bar is { } bar)
         {

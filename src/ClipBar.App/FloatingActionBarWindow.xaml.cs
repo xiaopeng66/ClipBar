@@ -144,9 +144,12 @@ public partial class FloatingActionBarWindow : Window
             NativeMethods.GwlExStyle,
             new IntPtr(style | NativeMethods.WsExToolWindow));
 
-        NativeMethods.SetNonClientRendering(hwnd, enabled: false);
-        NativeMethods.SetRoundCorners(hwnd);
-        FrameBorder.Pin(this);
+        if (!AllowsTransparency)
+        {
+            NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+            NativeMethods.SetRoundCorners(hwnd);
+            FrameBorder.Pin(this);
+        }
     }
 
     private void Window_Deactivated(object? sender, EventArgs e)

@@ -95,7 +95,10 @@ public partial class CompactPanelWindow : Window
     /// Shows the list below the floating bar without activating (the target app keeps focus),
     /// anchored to <paramref name="anchor"/> and pasting into <paramref name="target"/>.
     /// </summary>
-    public async Task ShowBelowAsync(Window anchor, IntPtr target)
+    public async Task ShowBelowAsync(
+        Window anchor,
+        IntPtr target,
+        IReadOnlyList<ClipItem>? preloaded = null)
     {
         _anchor = anchor;
         _managedByCoordinator = true;
@@ -104,21 +107,31 @@ public partial class CompactPanelWindow : Window
         // click but the follow-up Ctrl+V did not land in the target's focused control, while
         // PasteService's re-activation of the captured target makes the activated variant paste
         // correctly (verified end to end).
-        await ShowCoreAsync(target, anchor, noActivate: false).ConfigureAwait(true);
+        await ShowCoreAsync(target, anchor, noActivate: false, preloaded).ConfigureAwait(true);
     }
 
     /// <summary>True when the pointer is over the list; the coordinator keeps it open for this.</summary>
     public bool IsPointerOver => IsMouseOver;
 
-    private async Task ShowCoreAsync(IntPtr target, Window? anchor, bool noActivate)
+    private async Task ShowCoreAsync(
+        IntPtr target,
+        Window? anchor,
+        bool noActivate,
+        IReadOnlyList<ClipItem>? preloaded = null)
     {
         _target = target;
         _noActivate = noActivate;
 
-        var limit = Math.Clamp(_settings().MaxItems, 10, MaxRowsCeiling);
-        var rows = await _repository
-            .QueryAsync(ClipFilter.All, search: null, limit: limit)
-            .ConfigureAwait(true);
+        // The floating bar prefetches the rows while the pointer is still travelling, so opening
+        // the list is a render, not a query + render. The SnipDo path passes null and queries here.
+        var rows = preloaded;
+        if (rows is null)
+        {
+            var limit = Math.Clamp(_settings().MaxItems, 10, MaxRowsCeiling);
+            rows = await _repository
+                .QueryAsync(ClipFilter.All, search: null, limit: limit)
+                .ConfigureAwait(true);
+        }
 
         RowPanel.Children.Clear();
         foreach (var item in rows)
@@ -147,6 +160,9 @@ public partial class CompactPanelWindow : Window
             ShowActivated = false;
         }
 
+        // Cloak until the first rendered frame: without it the list appeared as an empty surface
+        // for a beat while WPF painted the rows.
+        FlashFreeShow.Prepare(this);
         Show();
 
         if (!_noActivate)
