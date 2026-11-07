@@ -23,3 +23,6 @@ TestResults/
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Windows reserved-name artifacts
+/nul
