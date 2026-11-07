@@ -27,6 +27,11 @@
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                 <Setter Property="Cursor" Value="Hand" />
+                <!-- The stock WPF focus visual is a dotted rectangle: white dots on the dark
+                     theme, dark dots on the light one, and on a rounded pill they land exactly
+                     on the corner arcs (the user's 圆角白/黑印记). Selection and hover already
+                     carry the state; keyboard focus gets a real ring below. -->
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ListBoxItem">
@@ -56,6 +61,12 @@
                                             Value="{DynamicResource AccentFillColorDefaultBrush}" />
                                     <Setter Property="Foreground" Value="White" />
                                 </Trigger>
+                                <!-- Keyboard focus without the dotted stock visual: a solid
+                                     ring around the pill, same geometry, no corner speckle. -->
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Pill" Property="BorderBrush"
+                                            Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
@@ -71,6 +82,7 @@
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Opacity" Value="0" />
                 <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">

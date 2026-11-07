@@ -173,6 +173,9 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
+            <!-- Same dotted focus visual as the chips: on the dark theme it paints white dots
+                 along the card's rounded edge. Selection/hover already read clearly. -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <!-- F-12: without a name the UIA tree reported every history row as the view-model
                  type name, so screen readers could not tell rows apart. The visible title text
                  is the semantic the row carries. -->
