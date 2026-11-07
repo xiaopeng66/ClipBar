@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -85,6 +85,9 @@ public partial class SettingsWindow : Window
         ImagePreviewBox.SelectedValue = source.ImagePreview;
         PanelPositionBox.SelectedValue = source.PanelPositionMode;
         PasteOnClickCheck.IsChecked = source.PasteOnClick;
+        NativeFloatingCheck.IsChecked = source.NativeFloatingEnabled;
+        InvokeOnDragCheck.IsChecked = source.InvokeOnDrag;
+        HoldDurationBox.Text = source.HoldDurationMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeepPanelOpenCheck.IsChecked = source.KeepPanelOpenAfterPaste;
         StartWithWindowsCheck.IsChecked = source.StartWithWindows;
         CaptureImagesCheck.IsChecked = source.CaptureImages;
@@ -108,6 +111,11 @@ public partial class SettingsWindow : Window
         PanelPositionBox.SelectionChanged += OnFormEdited;
         PasteOnClickCheck.Checked += OnFormEdited;
         PasteOnClickCheck.Unchecked += OnFormEdited;
+        NativeFloatingCheck.Checked += OnFormEdited;
+        NativeFloatingCheck.Unchecked += OnFormEdited;
+        InvokeOnDragCheck.Checked += OnFormEdited;
+        InvokeOnDragCheck.Unchecked += OnFormEdited;
+        HoldDurationBox.TextChanged += OnFormEdited;
         KeepPanelOpenCheck.Checked += OnFormEdited;
         KeepPanelOpenCheck.Unchecked += OnFormEdited;
         StartWithWindowsCheck.Checked += OnFormEdited;
@@ -234,6 +242,12 @@ public partial class SettingsWindow : Window
             return false;
         }
 
+        if (!int.TryParse(HoldDurationBox.Text.Trim(), out var holdMs) || holdMs is < 200 or > 2000)
+        {
+            ShowStatus("长按触发时长需要是 200–2000 之间的整数毫秒。");
+            return false;
+        }
+
         var candidate = Normalize(BuildCandidate()!);
 
         var result = _save(candidate);
@@ -283,6 +297,12 @@ public partial class SettingsWindow : Window
         candidate.Theme = ThemeBox.SelectedValue as string ?? "System";
         candidate.ImagePreview = ImagePreviewBox.SelectedValue as string ?? "Large";
         candidate.PanelPositionMode = PanelPositionBox.SelectedValue as string ?? "MonitorCenter";
+        candidate.NativeFloatingEnabled = NativeFloatingCheck.IsChecked == true;
+        candidate.InvokeOnDrag = InvokeOnDragCheck.IsChecked == true;
+        if (int.TryParse(HoldDurationBox.Text.Trim(), out var holdMs))
+        {
+            candidate.HoldDurationMs = holdMs;
+        }
         candidate.PasteOnClick = PasteOnClickCheck.IsChecked == true;
         candidate.KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true;
         candidate.StartWithWindows = StartWithWindowsCheck.IsChecked == true;

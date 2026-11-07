@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -37,6 +37,16 @@ public partial class CompactPanelWindow : Window
     private bool _pasting;
 
     /// <summary>
+    /// Set when the floating bar opens the list: the list must not activate, or the app the user
+    /// was typing in loses focus mid-gesture. The coordinator then owns dismissal for both
+    /// windows, so no per-window outside-click hook is installed.
+    /// </summary>
+    private bool _noActivate;
+
+    private Window? _anchor;
+    private bool _managedByCoordinator;
+
+    /// <summary>
     /// Safety net for the case where Activate() did not take (another app holds the foreground):
     /// Deactivated would never fire, so a click outside is watched directly.
     /// </summary>
@@ -52,6 +62,7 @@ public partial class CompactPanelWindow : Window
         _pasteService = pasteService;
         _settings = settings;
         SourceInitialized += (_, _) => ApplyToolWindowStyle();
+
         Closed += (_, _) =>
         {
             _closing = true;
@@ -66,13 +77,40 @@ public partial class CompactPanelWindow : Window
         // Capture the paste target BEFORE we are shown: once this window is up it owns the
         // foreground, and the clip must land in the app SnipDo was invoked from.
         var foreground = NativeMethods.GetForegroundWindow();
-        _target = foreground;
+        var target = foreground;
         if (!PasteTarget.WorthCapturing(foreground, SelfProcessId, PidOf))
         {
             // The SnipDo toolbar itself is often the foreground; fall back to the previous
             // window of this app's own tracking when that happens.
-            _target = _lastKnownTarget;
+            target = _lastKnownTarget;
         }
+
+        await ShowCoreAsync(target, anchor: null, noActivate: false).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Shows the list below the floating bar without activating (the target app keeps focus),
+    /// anchored to <paramref name="anchor"/> and pasting into <paramref name="target"/>.
+    /// </summary>
+    public async Task ShowBelowAsync(Window anchor, IntPtr target)
+    {
+        _anchor = anchor;
+        _managedByCoordinator = true;
+
+        // Deliberately activated on click (ShowActivated=false still keeps the caret in the
+        // target until then): a WS_EX_NOACTIVATE list did not receive WPF mouse input at all,
+        // so its rows could not be clicked. PasteService re-activates the captured target
+        // before sending Ctrl+V, so the click cannot paste into ClipBar itself.
+        await ShowCoreAsync(target, anchor, noActivate: false).ConfigureAwait(true);
+    }
+
+    /// <summary>True when the pointer is over the list; the coordinator keeps it open for this.</summary>
+    public bool IsPointerOver => IsMouseOver;
+
+    private async Task ShowCoreAsync(IntPtr target, Window? anchor, bool noActivate)
+    {
+        _target = target;
+        _noActivate = noActivate;
 
         var rows = await _repository
             .QueryAsync(ClipFilter.All, search: null, limit: MaxRows)
@@ -89,21 +127,81 @@ public partial class CompactPanelWindow : Window
             ? "复制点内容再来"
             : $"{rows.Count} 条 · 点击即粘贴 · Esc 关闭";
 
-        PlaceNearCursor();
-        Show();
-        Activate();
+        if (anchor is null)
+        {
+            PlaceNearCursor();
+        }
+        else
+        {
+            PlaceBelow(anchor);
+        }
 
-        var hwnd = new WindowInteropHelper(this).Handle;
-        _outsideClick = OutsideClickHook.StartForPopup(
-            () => !_closing && !_pasting && IsVisible,
-            (x, y) => IsPointInside(hwnd, x, y),
-            () =>
-            {
-                if (!_closing && !_pasting)
+        if (_noActivate)
+        {
+            // Must be set before Show(): WPF reads it when the window is shown, and a floating
+            // list that activated would take the caret away from the app being pasted into.
+            ShowActivated = false;
+        }
+
+        Show();
+
+        if (!_noActivate)
+        {
+            Activate();
+        }
+
+        if (!_managedByCoordinator)
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            _outsideClick = OutsideClickHook.StartForPopup(
+                () => !_closing && !_pasting && IsVisible,
+                (x, y) => IsPointInside(hwnd, x, y),
+                () =>
                 {
-                    Close();
-                }
-            });
+                    if (!_closing && !_pasting)
+                    {
+                        Close();
+                    }
+                });
+        }
+    }
+
+    /// <summary>Places the list directly under the floating bar, clamped to the work area.</summary>
+    private void PlaceBelow(Window anchor)
+    {
+        var anchorPoint = new NativeMethods.Point(
+            (int)Math.Round(anchor.Left * 1),
+            (int)Math.Round(anchor.Top * 1));
+
+        if (Content is FrameworkElement root)
+        {
+            root.Measure(new Size(Width, double.PositiveInfinity));
+            var desired = Math.Ceiling(root.DesiredSize.Height);
+            if (desired > 0)
+            {
+                Height = desired;
+            }
+        }
+
+        var width = double.IsNaN(Width) ? 300 : Width;
+        var height = double.IsNaN(Height) ? 260 : Height;
+        var gap = 6.0;
+
+        var left = Math.Max(anchor.Left, anchor.Left);
+        var top = anchor.Top + anchor.ActualHeight + gap;
+
+        var monitor = NativeMethods.MonitorFromPoint(anchorPoint, NativeMethods.MonitorDefaultToNearest);
+        var scale = NativeMethods.MonitorScale(monitor);
+        var work = WorkArea(monitor, scale);
+
+        if (top + height > work.Bottom - ScreenMargin)
+        {
+            // Flip above the bar when there is no room below.
+            top = Math.Max(work.Top + ScreenMargin, anchor.Top - height - gap);
+        }
+
+        Left = Math.Max(work.Left + ScreenMargin, Math.Min(left, work.Right - width - ScreenMargin));
+        Top = Math.Max(work.Top + ScreenMargin, top);
     }
 
     /// <summary>The last non-self window this app pasted into, for targets like SnipDo's toolbar.</summary>
@@ -249,6 +347,7 @@ public partial class CompactPanelWindow : Window
             var outcome = await _pasteService
                 .PasteAsync(item, target, paste: true, new WindowInteropHelper(this).Handle, SelfProcessId)
                 .ConfigureAwait(true);
+            AppLog.Write($"Compact list: paste outcome {outcome}");
             if (outcome == PasteOutcome.CopyFailed)
             {
                 AppLog.Write("Compact paste: clipboard write failed");
@@ -338,10 +437,17 @@ public partial class CompactPanelWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         var style = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64();
+        var extra = NativeMethods.WsExToolWindow;
+        if (_noActivate)
+        {
+            extra |= NativeMethods.WsExNoActivate;
+            ShowActivated = false;
+        }
+
         NativeMethods.SetWindowLongPtr(
             hwnd,
             NativeMethods.GwlExStyle,
-            new IntPtr(style | NativeMethods.WsExToolWindow));
+            new IntPtr(style | extra));
 
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
         NativeMethods.SetRoundCorners(hwnd);
@@ -350,6 +456,13 @@ public partial class CompactPanelWindow : Window
 
     private void Window_Deactivated(object? sender, EventArgs e)
     {
+        // The coordinator owns dismissal for the floating pair (bar + list): it closes them when
+        // the pointer leaves both, so a transient deactivation must not close just the list.
+        if (_managedByCoordinator)
+        {
+            return;
+        }
+
         if (!_closing && !_pasting)
         {
             Close();

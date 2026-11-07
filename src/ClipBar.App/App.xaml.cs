@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -40,6 +40,12 @@ public partial class App : Application
     private ExtensionService _extensions = null!;
     private MainWindow? _mainWindow;
     private SettingsWindow? _settingsWindow;
+
+    /// <summary>
+    /// The native floating clipboard bar (Raw Input gestures). Null while disabled, and also
+    /// null when Raw Input is unavailable on this session.
+    /// </summary>
+    private FloatingBarCoordinator? _floatingBar;
 
     public App()
     {
@@ -153,6 +159,8 @@ public partial class App : Application
                 ExitApp,
                 () => _monitor.IsPaused,
                 ToggleCapturePaused);
+
+            StartFloatingBar();
 
             // G-02: a show signal can arrive while the repository init is still awaiting, before
             // the window exists; it used to vanish silently. Consume it now instead.
@@ -392,6 +400,53 @@ public partial class App : Application
         window.ShowPanel(reason);
     }
 
+    /// <summary>Starts the native floating bar once the panel window (and its HWND) exists.</summary>
+    private void StartFloatingBar()
+    {
+        if (!_settings.NativeFloatingEnabled || _floatingBar is not null || _mainWindow is not { } panel)
+        {
+            return;
+        }
+
+        try
+        {
+            // The panel is created lazily and its HWND only exists once WPF has initialized it.
+            // Raw Input has to be registered against that HWND, so force it now instead of
+            // silently staying off until the first manual open.
+            var helper = new System.Windows.Interop.WindowInteropHelper(panel);
+            if (helper.Handle == IntPtr.Zero)
+            {
+                helper.EnsureHandle();
+            }
+
+            var coordinator = new FloatingBarCoordinator(
+                _repository,
+                _pasteService,
+                () => _settings,
+                () => helper.Handle,
+                () => panel.IsVisible);
+            if (coordinator.Start())
+            {
+                _floatingBar = coordinator;
+            }
+            else
+            {
+                coordinator.Dispose();
+                AppLog.Write("Native floating bar unavailable; staying off");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Start floating bar", ex);
+        }
+    }
+
+    private void StopFloatingBar()
+    {
+        _floatingBar?.Dispose();
+        _floatingBar = null;
+    }
+
     /// <summary>Persists the panel's size/position (A5) — called from MainWindow on hide.</summary>
     private void NotePanelGeometry(double left, double top, double width, double height)
     {
@@ -545,6 +600,18 @@ public partial class App : Application
                 panel.ImagePreviewMode = _settings.ImagePreview;
                 panel.ViewModel.SetImagePreviewMode(_settings.ImagePreview);
             }
+
+            // The floating bar is a global input listener: only run it while the user asked for
+            // it, and pick up new timings immediately after saving.
+            if (_settings.NativeFloatingEnabled)
+            {
+                StartFloatingBar();
+                _floatingBar?.ApplySettings();
+            }
+            else
+            {
+                StopFloatingBar();
+            }
         }
         catch (Exception ex)
         {
@@ -628,6 +695,8 @@ public partial class App : Application
 
         // Stop the listener before tearing the window down: it used to be woken by its own
         // shutdown signal and queue a show against a window that was already closed.
+        _floatingBar?.Dispose();
+        _floatingBar = null;
         _showListener?.Dispose();
         _showListener = null;
         _compactListener?.Dispose();
@@ -650,6 +719,8 @@ public partial class App : Application
         _compactListener = null;
         _compactEvent?.Dispose();
         _compactEvent = null;
+        _floatingBar?.Dispose();
+        _floatingBar = null;
 
         // Releasing the mutex is the guard's job: it also handles the case where shutdown runs
         // on a thread that does not own it, instead of leaking a held mutex on exit.

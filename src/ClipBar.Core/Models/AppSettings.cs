@@ -1,4 +1,4 @@
-﻿namespace ClipBar.Core.Models;
+namespace ClipBar.Core.Models;
 
 public sealed class AppSettings
 {
@@ -53,6 +53,27 @@ public sealed class AppSettings
 
     public int PanelHeight { get; set; } = 620;
 
+    /// <summary>
+    /// Enables ClipBar's own floating clipboard bar (hold left button over a text field, or drag
+    /// select text) without SnipDo. Off by default: it installs a global input listener.
+    /// </summary>
+    public bool NativeFloatingEnabled { get; set; }
+
+    /// <summary>Show the floating bar after the left button is held still this long.</summary>
+    public int HoldDurationMs { get; set; } = 600;
+
+    /// <summary>Moving further than this many pixels turns a press into a drag-select.</summary>
+    public int DragThresholdPx { get; set; } = 15;
+
+    /// <summary>Hovering the bar's clipboard button this long expands the compact list.</summary>
+    public int HoverExpandMs { get; set; } = 200;
+
+    /// <summary>Close the floating bar (and its list) this long after the pointer leaves.</summary>
+    public int FloatingAutoHideMs { get; set; } = 1000;
+
+    /// <summary>Also show the bar when a drag selected text (not only on hold).</summary>
+    public bool InvokeOnDrag { get; set; } = true;
+
     public bool StartWithWindows { get; set; }
 
     public bool CaptureImages { get; set; } = true;
@@ -86,6 +107,12 @@ public sealed class AppSettings
         PanelTop = PanelTop,
         PanelWidth = PanelWidth,
         PanelHeight = PanelHeight,
+        NativeFloatingEnabled = NativeFloatingEnabled,
+        HoldDurationMs = HoldDurationMs,
+        DragThresholdPx = DragThresholdPx,
+        HoverExpandMs = HoverExpandMs,
+        FloatingAutoHideMs = FloatingAutoHideMs,
+        InvokeOnDrag = InvokeOnDrag,
         StartWithWindows = StartWithWindows,
         CaptureImages = CaptureImages,
         CaptureFiles = CaptureFiles,
@@ -104,6 +131,10 @@ public sealed class AppSettings
     public AppSettings Normalize()
     {
         MaxItems = Math.Clamp(MaxItems, 10, 5000);
+        HoldDurationMs = Math.Clamp(HoldDurationMs <= 0 ? 600 : HoldDurationMs, 200, 2000);
+        DragThresholdPx = Math.Clamp(DragThresholdPx <= 0 ? 15 : DragThresholdPx, 4, 100);
+        HoverExpandMs = Math.Clamp(HoverExpandMs < 0 ? 200 : HoverExpandMs, 0, 2000);
+        FloatingAutoHideMs = Math.Clamp(FloatingAutoHideMs <= 0 ? 1000 : FloatingAutoHideMs, 300, 10000);
         PanelWidth = Math.Clamp(PanelWidth <= 0 ? 420 : PanelWidth, 360, 2000);
         PanelHeight = Math.Clamp(PanelHeight <= 0 ? 620 : PanelHeight, 480, 1600);
         Hotkey = Hotkey?.Trim() ?? string.Empty;
