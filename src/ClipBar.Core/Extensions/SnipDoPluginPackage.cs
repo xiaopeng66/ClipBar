@@ -25,16 +25,19 @@ public static class SnipDoPluginPackage
         ResetDirectory(extensionFolder);
         ResetDirectory(pasteActionFolder);
 
-        var launcher = SnipDoPluginBuilder.LauncherScript(executablePath);
+        // The extension action opens the full panel; the paste action opens the compact list,
+        // which is what SnipDo's own clipboard button shows.
+        var panelLauncher = SnipDoPluginBuilder.LauncherScript(executablePath);
+        var compactLauncher = SnipDoPluginBuilder.LauncherScript(executablePath, compact: true);
 
         // The extension copy is a normal SnipDo package: extension.json + script + icons.
         WriteText(Path.Combine(extensionFolder, "extension.json"), SnipDoPluginBuilder.ExtensionManifest());
-        WriteText(Path.Combine(extensionFolder, SnipDoPluginBuilder.LauncherFileName), launcher);
+        WriteText(Path.Combine(extensionFolder, SnipDoPluginBuilder.LauncherFileName), panelLauncher);
         WriteIcons(extensionFolder);
 
         // The paste-action copy uses data.json, the layout SnipDo's user store expects.
         WriteText(Path.Combine(pasteActionFolder, "data.json"), SnipDoPluginBuilder.PasteActionManifest());
-        WriteText(Path.Combine(pasteActionFolder, SnipDoPluginBuilder.LauncherFileName), launcher);
+        WriteText(Path.Combine(pasteActionFolder, SnipDoPluginBuilder.LauncherFileName), compactLauncher);
         WriteIcons(pasteActionFolder);
 
         var packagePath = Path.Combine(rootDirectory, PackageFileName);

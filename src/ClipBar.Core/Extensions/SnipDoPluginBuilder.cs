@@ -80,10 +80,44 @@ public static class SnipDoPluginBuilder
     /// ClipBar with <c>--show</code>. ASCII-only on purpose, because Windows PowerShell 5.1
     /// reads BOM-less scripts as the ANSI codepage.
     /// </summary>
-    public static string LauncherScript(string executablePath)
+    public static string LauncherScript(string executablePath, bool compact = false)
     {
         var quoted = executablePath.Replace("'", "''", StringComparison.Ordinal);
-        return """
+        var template = compact ? CompactLauncherTemplate : PanelLauncherTemplate;
+        return template.Replace("EXE_PATH", quoted, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The paste action's launcher: opens the compact list (recent clips, click to paste)
+    /// instead of the full panel, matching what SnipDo's own clipboard button does.
+    /// </summary>
+    private const string CompactLauncherTemplate = """
+            # ClipBar launcher for SnipDo (compact list).
+            # Opens the small recent-clips list; a click pastes into the previous window.
+            $ErrorActionPreference = 'Stop'
+            $eventName = 'Local\ClipBar.Compact'
+            $exe = 'EXE_PATH'
+
+            try {
+                $handle = [System.Threading.EventWaitHandle]::OpenExisting($eventName)
+                $handle.Set() | Out-Null
+                $handle.Dispose()
+                exit 0
+            }
+            catch {
+                # No running instance yet; fall through and start one.
+            }
+
+            if (-not (Test-Path -LiteralPath $exe)) {
+                exit 1
+            }
+
+            Start-Process -FilePath $exe -ArgumentList '--compact' -WorkingDirectory (Split-Path -Parent $exe)
+            exit 0
+            """;
+
+    /// <summary>The extension action's launcher: the full panel.</summary>
+    private const string PanelLauncherTemplate = """
             # ClipBar launcher for SnipDo.
             # Summons the running panel through its named event, or starts ClipBar with --show.
             $ErrorActionPreference = 'Stop'
@@ -106,8 +140,7 @@ public static class SnipDoPluginBuilder
 
             Start-Process -FilePath $exe -ArgumentList '--show' -WorkingDirectory (Split-Path -Parent $exe)
             exit 0
-            """.Replace("EXE_PATH", quoted, StringComparison.Ordinal);
-    }
+            """;
 
     /// <summary>Single-colour glyph: a rounded square with three history lines.</summary>
     public static string MonochromeIcon() => """

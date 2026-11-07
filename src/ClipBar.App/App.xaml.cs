@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -15,9 +15,20 @@ public partial class App : Application
     private const string MutexName = @"Local\ClipBar.SingleInstance";
     private const string ShowEventName = @"Local\ClipBar.Show";
 
+    /// <summary>Named event the SnipDo paste action signals to open the compact list.</summary>
+    private const string CompactEventName = @"Local\ClipBar.Compact";
+
     private SingleInstanceGuard? _singleInstance;
     private EventWaitHandle? _showEvent;
     private ShowSignalListener? _showListener;
+
+    /// <summary>
+    /// Separate signal for the compact list the SnipDo paste action opens, so the button can
+    /// show the small picker without the full panel appearing.
+    /// </summary>
+    private EventWaitHandle? _compactEvent;
+    private ShowSignalListener? _compactListener;
+    private CompactPanelWindow? _compactWindow;
     private JsonSettingsStore _settingsStore = null!;
     private AppSettings _settings = null!;
     private SqliteClipRepository _repository = null!;
@@ -71,6 +82,7 @@ public partial class App : Application
         // A second launch (including the one a SnipDo action starts) only wakes the
         // running instance; --show is what makes that explicit at the call site.
         var showOnStart = e.Args.Any(arg => string.Equals(arg, "--show", StringComparison.OrdinalIgnoreCase));
+        var compactOnStart = e.Args.Any(arg => string.Equals(arg, "--compact", StringComparison.OrdinalIgnoreCase));
 
         _singleInstance = SingleInstanceGuard.TryAcquire(
             MutexName + AppPaths.InstanceSuffix,
@@ -190,6 +202,14 @@ public partial class App : Application
             }
 
             AppLog.Write("ClipBar started");
+            RefreshInstalledSnipDoAction();
+
+            if (compactOnStart)
+            {
+                _ = Dispatcher.BeginInvoke(
+                    new Action(() => ShowCompact("startup")),
+                    DispatcherPriority.ApplicationIdle);
+            }
 
             if (showOnStart)
             {
@@ -250,6 +270,17 @@ public partial class App : Application
     private void StartShowListener()
     {
         _showEvent = _singleInstance?.CreateShowEvent();
+        try
+        {
+            _compactEvent = new EventWaitHandle(
+                false,
+                EventResetMode.AutoReset,
+                CompactEventName + AppPaths.InstanceSuffix);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            AppLog.Error("Create compact event", ex);
+        }
 
         // The listener owns the exit flag: an AutoReset handle never makes WaitOne return false,
         // so the old loop could only leave by hitting the ObjectDisposedException after shutdown
@@ -260,6 +291,82 @@ public partial class App : Application
                 _showEvent,
                 () => Dispatcher.BeginInvoke(new Action(() => ShowPanel("signal"))),
                 AppLog.Error);
+        }
+
+        if (_compactEvent is not null)
+        {
+            _compactListener = new ShowSignalListener(
+                _compactEvent,
+                () => Dispatcher.BeginInvoke(new Action(() => ShowCompact("signal"))),
+                AppLog.Error);
+        }
+    }
+
+    /// <summary>
+    /// Shows the compact clipboard list (the SnipDo paste action): recent rows only, click to
+    /// paste. The full panel stays closed.
+    /// </summary>
+    private void ShowCompact(string reason)
+    {
+        if (_repository is null || _pasteService is null)
+        {
+            AppLog.Write($"Show compact ({reason}) deferred: services not ready");
+            return;
+        }
+
+        if (_compactWindow is { IsVisible: true } open)
+        {
+            open.Activate();
+            return;
+        }
+
+        try
+        {
+            _settingsWindow?.Hide();
+            _mainWindow?.Hide();
+            var window = new CompactPanelWindow(_repository, _pasteService, () => _settings);
+            window.Closed += (_, _) => _compactWindow = null;
+            _compactWindow = window;
+            _ = window.ShowAtCursorAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Show compact", ex);
+        }
+    }
+
+    /// <summary>
+    /// Rewrites the SnipDo paste action when it is already installed. The action is generated
+    /// content (a launcher script plus a manifest), so an upgraded app must not keep a stale
+    /// copy: before this, the SnipDo button kept opening whatever the old script did until the
+    /// user reinstalled it from the settings window. Best-effort: a locked or missing SnipDo
+    /// store just leaves the installed copy alone.
+    /// </summary>
+    private void RefreshInstalledSnipDoAction()
+    {
+        try
+        {
+            if (!SnipDoPluginExporter.IsPasteActionInstalled())
+            {
+                return;
+            }
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    new SnipDoPluginExporter().InstallPasteAction();
+                    AppLog.Write("SnipDo paste action refreshed");
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Refresh SnipDo paste action", ex);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Check SnipDo paste action", ex);
         }
     }
 
@@ -523,6 +630,10 @@ public partial class App : Application
         // shutdown signal and queue a show against a window that was already closed.
         _showListener?.Dispose();
         _showListener = null;
+        _compactListener?.Dispose();
+        _compactListener = null;
+        _compactEvent?.Dispose();
+        _compactEvent = null;
 
         Shutdown();
     }
@@ -535,6 +646,10 @@ public partial class App : Application
         _showListener?.Dispose();
         _showListener = null;
         _showEvent = null;
+        _compactListener?.Dispose();
+        _compactListener = null;
+        _compactEvent?.Dispose();
+        _compactEvent = null;
 
         // Releasing the mutex is the guard's job: it also handles the case where shutdown runs
         // on a thread that does not own it, instead of leaking a held mutex on exit.

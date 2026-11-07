@@ -44,6 +44,27 @@ public sealed class SnipDoPluginBuilderTests
     }
 
     [Fact]
+    public void CompactLauncherSignalsTheCompactEventAndStartsCompact()
+    {
+        var script = SnipDoPluginBuilder.LauncherScript(@"C:\Tools\ClipBar.exe", compact: true);
+
+        // SnipDo's clipboard button must open the small list, not the full panel.
+        Assert.Contains(@"Local\ClipBar.Compact", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"Local\ClipBar.Show", script, StringComparison.Ordinal);
+        Assert.Contains("--compact", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("--show", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PanelLauncherStillSignalsTheShowEvent()
+    {
+        var script = SnipDoPluginBuilder.LauncherScript(@"C:\Tools\ClipBar.exe");
+
+        Assert.Contains(@"Local\ClipBar.Show", script, StringComparison.Ordinal);
+        Assert.Contains("--show", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("--compact", script, StringComparison.Ordinal);
+    }
+
     public void LauncherScriptIsAsciiAndSignalsTheRunningInstance()
     {
         var script = SnipDoPluginBuilder.LauncherScript(@"C:\Tools\ClipBar.exe");
