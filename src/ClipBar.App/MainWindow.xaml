@@ -282,7 +282,7 @@
 
         <Border CornerRadius="8"
                 Background="{DynamicResource AppSurfaceBrush}"
-                Opacity="0.88" />
+                Opacity="{DynamicResource SurfaceLayerOpacity}" />
 
         <Border CornerRadius="8"
                 BorderThickness="1"

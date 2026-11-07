@@ -92,7 +92,7 @@
     <Grid x:Name="Root" TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
         <Border CornerRadius="8"
                 Background="{DynamicResource AppSurfaceBrush}"
-                Opacity="0.9" />
+                Opacity="{DynamicResource SurfaceLayerOpacity}" />
         <Border CornerRadius="8"
                 BorderThickness="1"
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"

@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Threading;
 using System.Windows.Media;
 using Wpf.Ui.Appearance;
@@ -199,6 +199,12 @@ public static class ThemeService
         {
             return;
         }
+
+        // The self-drawn surface layer (panel, menus, dialogs) sits over the DWM backdrop.
+        // The system backdrop tint follows the WINDOWS theme, not the app theme: a light app
+        // theme on a dark Windows mode mixed to a muddy gray (the user's 浅色模式灰不拉几).
+        // A higher layer opacity in light mode lets the theme surface dominate the blend.
+        resources["SurfaceLayerOpacity"] = theme == ApplicationTheme.Light ? 0.96d : 0.88d;
 
         // Whichever ramp is not active has to be dropped again, otherwise the previous theme's
         // brushes would keep shadowing the newly applied theme dictionary.

@@ -21,7 +21,7 @@
              app showed a dark options window (D-A-03). -->
         <Border CornerRadius="8"
                 Background="{DynamicResource AppSurfaceBrush}"
-                Opacity="0.92" />
+                Opacity="{DynamicResource SurfaceLayerOpacity}" />
         <Border CornerRadius="8"
                 BorderThickness="1"
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}">
