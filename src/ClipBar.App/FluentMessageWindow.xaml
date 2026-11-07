@@ -43,6 +43,11 @@
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
                 Padding="20,16,20,16">
             <StackPanel>
+                <TextBlock x:Name="HeadingText"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8"
+                           Visibility="Collapsed"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

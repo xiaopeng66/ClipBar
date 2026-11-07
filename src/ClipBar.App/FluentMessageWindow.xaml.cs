@@ -25,6 +25,22 @@ public partial class FluentMessageWindow : Window
     /// </summary>
     private bool _modal = true;
 
+    /// <summary>
+    /// The heading used to render inside the FluentWindow caption strip; the plain Window has
+    /// no caption, so it is a visible row instead (collapsed when absent).
+    /// </summary>
+    private void SetHeading(string? heading)
+    {
+        if (string.IsNullOrWhiteSpace(heading))
+        {
+            HeadingText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        HeadingText.Text = heading;
+        HeadingText.Visibility = Visibility.Visible;
+    }
+
     /// <summary>Yes/No style confirmation; returns true only when the primary button is pressed.</summary>
     public static bool Confirm(Window? owner, string message, string primary = "确定", string secondary = "取消")
     {
@@ -65,7 +81,7 @@ public partial class FluentMessageWindow : Window
             window.PrimaryButton.Click += (_, _) => action();
         }
         window.SecondaryButton.Visibility = Visibility.Collapsed;
-        window.Title = heading ?? "ClipBar";
+        window.SetHeading(heading);
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         var timer = new System.Windows.Threading.DispatcherTimer
@@ -94,7 +110,7 @@ public partial class FluentMessageWindow : Window
         window.Glyph.Symbol = symbol;
         window.MessageText.Text = message;
         window.PrimaryButton.Content = primary;
-        window.Title = heading ?? "ClipBar";
+        window.SetHeading(heading);
 
         if (secondary is null)
         {
