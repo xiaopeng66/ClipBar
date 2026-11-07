@@ -106,7 +106,7 @@ public class FrameBorderTests
                 Assert.All(recorder.Calls, call =>
                 {
                     Assert.Equal(hwnd, call.Hwnd);
-                    Assert.Equal(FrameBorder.Color, call.Color);
+                    Assert.Equal(FrameBorder.CurrentColor, call.Color);
                 });
             }
             finally
@@ -137,7 +137,7 @@ public class FrameBorderTests
             try
             {
                 Assert.True(recorder.Calls.Count >= 2, "pin did not fire on both events: " + recorder.Calls.Count);
-                Assert.All(recorder.Calls, call => Assert.Equal(FrameBorder.Color, call.Color));
+                Assert.All(recorder.Calls, call => Assert.Equal(FrameBorder.CurrentColor, call.Color));
             }
             finally
             {
@@ -150,8 +150,10 @@ public class FrameBorderTests
     public void PinnedColourDiffersFromTheTransparentTrap()
     {
         // The whole point of the fix: COLOR_NONE (0xFFFFFFFE) is the transparent frame that
-        // showed the desktop through as a light band. The pin must never be that value.
-        Assert.NotEqual(0xFFFFFFFEu, FrameBorder.Color);
+        // showed the desktop through as a light band. Neither theme pin may be that value.
+        Assert.NotEqual(0xFFFFFFFEu, FrameBorder.DarkColor);
+        Assert.NotEqual(0xFFFFFFFEu, FrameBorder.LightColor);
+        Assert.NotEqual(0xFFFFFFFEu, FrameBorder.CurrentColor);
     }
 
     [Fact]

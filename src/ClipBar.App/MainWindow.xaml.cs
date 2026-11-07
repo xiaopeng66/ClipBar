@@ -106,6 +106,10 @@ public partial class MainWindow : Window
             TargetProcessName,
             ReportRefreshFailure);
         DataContext = ViewModel;
+
+        // Rows shift on every capture (new item at the top) and every container changes place;
+        // the tracked pointer-over state of each row is meaningless after a shift, so drop it.
+        ViewModel.Items.CollectionChanged += (_, _) => ClearPointerOver();
         var initial = settings();
         Width = initial.PanelWidth;
         Height = initial.PanelHeight;
@@ -262,6 +266,7 @@ public partial class MainWindow : Window
             // state. A fresh show starts with no selection; the Down-arrow path re-selects the
             // first row on demand.
             HistoryList.SelectedItem = null;
+            ClearPointerOver();
             // Invalidate any geometry save still queued from the previous hide: it must not run
             // after RestorePlacement and persist the automatic position as a user position
             // (R12-F-06).
@@ -907,7 +912,7 @@ public partial class MainWindow : Window
         // desktop shine through. A fixed colour keeps the frame identical in every state.
         // Fix the system border colour so an inactive frame cannot turn into a light line; the
         // acrylic surface stays the window background.
-        NativeMethods.SetBorderColor(hwnd, 0x00202020);
+        NativeMethods.SetBorderColor(hwnd, Platform.FrameBorder.CurrentColor);
         NativeMethods.SetRoundCorners(hwnd);
 
         // The WPF-UI FluentWindow internals applied the acrylic backdrop and the resize chrome;
@@ -951,7 +956,7 @@ public partial class MainWindow : Window
 
     private void Window_Activated(object? sender, EventArgs e)
     {
-        NativeMethods.SetBorderColor(new WindowInteropHelper(this).Handle, 0x00202020);
+        NativeMethods.SetBorderColor(new WindowInteropHelper(this).Handle, Platform.FrameBorder.CurrentColor);
         // Deliberately no _showCompleted here: activation can happen while the window is still
         // cloaked, and a Deactivated during the transition must not hide a half-shown panel.
     }
@@ -1043,7 +1048,7 @@ public partial class MainWindow : Window
 
     private void Window_Deactivated(object? sender, EventArgs e)
     {
-        NativeMethods.SetBorderColor(new WindowInteropHelper(this).Handle, 0x00202020);
+        NativeMethods.SetBorderColor(new WindowInteropHelper(this).Handle, Platform.FrameBorder.CurrentColor);
         if (_allowClose || !_showCompleted)
         {
             return;
@@ -1179,6 +1184,37 @@ public partial class MainWindow : Window
         => SearchPlaceholder.Visibility = SearchBox.Text.Length == 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+    /// <summary>
+    /// Clears the tracked pointer-over state on every row. Called when the list shifts (a new
+    /// capture inserts a row and every container changes place) and when the panel shows: WPF's
+    /// own mouse-over state goes stale in exactly those cases because a stationary mouse
+    /// generates no events, and the card kept its hover highlight (and the pin/delete buttons)
+    /// with the pointer somewhere else entirely.
+    /// </summary>
+    private void ClearPointerOver()
+    {
+        foreach (var row in ViewModel.Items)
+        {
+            row.IsPointerOver = false;
+        }
+    }
+
+    private void HistoryItem_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListBoxItem { Content: ClipItemViewModel row })
+        {
+            row.IsPointerOver = true;
+        }
+    }
+
+    private void HistoryItem_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListBoxItem { Content: ClipItemViewModel row })
+        {
+            row.IsPointerOver = false;
+        }
+    }
 
     private void HistoryList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {

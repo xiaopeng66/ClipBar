@@ -264,11 +264,20 @@ $panel = OpenPanel
 if ($null -eq $panel) {
     # already blocked above
 } else {
-    $el = PanelEl
-    $edit = $el.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
-        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))
-    $edit.SetFocus(); Start-Sleep -Milliseconds 300
-    [System.Windows.Forms.SendKeys]::SendWait('+{F10}')
+    # Select a TEXT row explicitly: the keyboard menu reflects the selected row, and an
+    # image row legitimately has no "paste as plain text" action (an earlier run picked the
+    # newest image row and the harness mis-read a correct menu as a failure).
+    $textRow = $null
+    foreach ($row in (Rows)) {
+        if ($row.Current.Name -match 'regress text') { $textRow = $row; break }
+    }
+    if ($null -eq $textRow) {
+        Block 'keyboard menu' 'no text row to select'
+    } else {
+        $sp = $textRow.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+        $sp.Select(); Start-Sleep -Milliseconds 200
+        $textRow.SetFocus(); Start-Sleep -Milliseconds 200
+        [System.Windows.Forms.SendKeys]::SendWait('+{F10}')
     Start-Sleep -Milliseconds 900
     $plain = $null
     $pel = PanelEl
@@ -288,11 +297,12 @@ if ($null -eq $panel) {
             }
         }
     }
-    Check 'keyboard menu opens' ($null -ne $plain)
-    Check 'keyboard menu focuses first row' ($null -ne $plain -and $plain.Current.HasKeyboardFocus)
-    Esc
-    Check 'Esc closes keyboard menu, panel stays' (((MenuCount) -eq 0) -and ($null -ne (PanelWin)))
-    Esc
+        Check 'keyboard menu opens' ($null -ne $plain)
+        Check 'keyboard menu focuses first row' ($null -ne $plain -and $plain.Current.HasKeyboardFocus)
+        Esc
+        Check 'Esc closes keyboard menu, panel stays' (((MenuCount) -eq 0) -and ($null -ne (PanelWin)))
+        Esc
+    }
 }
 
 # ---------------- 3. source funnel ----------------

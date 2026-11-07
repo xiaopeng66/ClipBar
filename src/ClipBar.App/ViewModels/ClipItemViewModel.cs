@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows.Media.Imaging;
 using ClipBar.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -93,6 +93,20 @@ public sealed class ClipItemViewModel : ObservableObject
         get => _groupLabel;
         private set => SetProperty(ref _groupLabel, value);
     }
+
+    /// <summary>
+    /// Whether the pointer is currently over this row, tracked by the window with explicit
+    /// MouseEnter/MouseLeave handling and cleared whenever the list shifts or the panel shows.
+    /// WPF's own ListBoxItem.IsMouseOver goes stale — hiding the window under a stationary
+    /// mouse or shifting the rows on a new capture never delivers the leave, and the card
+    /// kept its hover highlight (and the pin/delete buttons) with the mouse elsewhere.
+    /// </summary>
+    public bool IsPointerOver
+    {
+        get => _isPointerOver;
+        set => SetProperty(ref _isPointerOver, value);
+    }
+    private bool _isPointerOver;
 
     public SymbolRegular IconSymbol
     {

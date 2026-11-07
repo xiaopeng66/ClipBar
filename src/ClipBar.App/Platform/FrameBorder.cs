@@ -15,15 +15,29 @@ namespace ClipBar.App.Platform;
 /// </summary>
 public static class FrameBorder
 {
-    /// <summary>Near-black hairline; identical in every activation state and system theme.</summary>
-    public const uint Color = 0x00202020;
+    /// <summary>Dark hairline for the dark surface (the panel's original pinned colour).</summary>
+    public const uint DarkColor = 0x00202020;
+
+    /// <summary>Light hairline for the light surface: visible against white without shouting.</summary>
+    public const uint LightColor = 0x00D6D6D6;
+
+    /// <summary>
+    /// The pinned colour for the currently applied app theme. The old single dark colour read
+    /// as a black border around the light-theme windows (the user's 浅色模式黑边).
+    /// </summary>
+    public static uint CurrentColor => Services.ThemeService.AppliedTheme == Wpf.Ui.Appearance.ApplicationTheme.Light
+        ? LightColor
+        : DarkColor;
+
+    /// <summary>Re-pins an already shown window after a theme switch.</summary>
+    public static void Repin(IntPtr hwnd) => NativeMethods.SetBorderColor(hwnd, CurrentColor);
 
     /// <summary>
     /// Pins the border colour now and after every event that can make DWM repaint the frame
     /// (source initialisation, first render, activation, deactivation).
     /// </summary>
     public static void Pin(Window window)
-        => Pin(window, static (hwnd, color) => NativeMethods.SetBorderColor(hwnd, color));
+        => Pin(window, static (hwnd, _) => NativeMethods.SetBorderColor(hwnd, CurrentColor));
 
     /// <summary>
     /// The wiring is testable because DWMWA_BORDER_COLOR is set-only: DwmGetWindowAttribute
@@ -36,7 +50,7 @@ public static class FrameBorder
             var hwnd = new WindowInteropHelper(window).Handle;
             if (hwnd != IntPtr.Zero)
             {
-                apply(hwnd, Color);
+                apply(hwnd, CurrentColor);
             }
         }
 

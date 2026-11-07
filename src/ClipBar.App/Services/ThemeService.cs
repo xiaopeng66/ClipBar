@@ -90,6 +90,9 @@ public static class ThemeService
     /// </summary>
     private static ApplicationTheme? _applied;
 
+    /// <summary>The theme currently applied to the dictionaries (null before the first Apply).</summary>
+    public static ApplicationTheme? AppliedTheme => _applied;
+
     static ThemeService()
     {
         ApplicationThemeManager.Changed += OnThemeChanged;
@@ -127,6 +130,34 @@ public static class ThemeService
         ApplyContrastOverrides(theme);
         SyncSurfaceBrush();
         RefreshWindowSurfaces();
+
+        // The pinned DWM border colour is theme-aware (dark hairline on the dark surface, light
+        // hairline on the light one); a theme switch must repaint every open window's frame.
+        var openWindows = Application.Current?.Windows;
+        var windowList = new List<Window>();
+        if (openWindows is not null)
+        {
+            foreach (Window ow in openWindows)
+            {
+                windowList.Add(ow);
+            }
+        }
+
+        foreach (var window in windowList)
+        {
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Platform.FrameBorder.Repin(hwnd);
+                }
+            }
+            catch
+            {
+                // A window mid-close has no hwnd; the next activation re-pins anyway.
+            }
+        }
 
         // A real theme change goes through the same backdrop teardown as a no-op one, and the
         // panel is a standalone top-level window rather than an owned one, so put its backdrop
@@ -261,6 +292,34 @@ public static class ThemeService
         ApplyContrastOverrides(theme);
         SyncSurfaceBrush();
         RefreshWindowSurfaces();
+
+        // The pinned DWM border colour is theme-aware (dark hairline on the dark surface, light
+        // hairline on the light one); a theme switch must repaint every open window's frame.
+        var openWindows = Application.Current?.Windows;
+        var windowList = new List<Window>();
+        if (openWindows is not null)
+        {
+            foreach (Window ow in openWindows)
+            {
+                windowList.Add(ow);
+            }
+        }
+
+        foreach (var window in windowList)
+        {
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Platform.FrameBorder.Repin(hwnd);
+                }
+            }
+            catch
+            {
+                // A window mid-close has no hwnd; the next activation re-pins anyway.
+            }
+        }
 
         // Changed fires before WPF-UI rebuilds window backgrounds; restoring immediately would
         // be overwritten. One dispatcher turn later the theme manager is done.
