@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="ClipBar"
-        Width="46"
-        Height="42"
+        Width="40"
+        Height="36"
         MinWidth="0"
         MinHeight="0"
         SizeToContent="Manual"
@@ -29,25 +29,27 @@
         <Border CornerRadius="8"
                 Background="{DynamicResource AppSurfaceBrush}"
                 Opacity="{DynamicResource SurfaceLayerOpacity}" />
-        <Border CornerRadius="8"
+        <Border CornerRadius="7"
                 BorderThickness="1"
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
-                Padding="4">
+                Padding="2">
             <StackPanel Orientation="Horizontal">
+                <!-- The ClipBar logo (the same mark the SnipDo action ships with), not a generic
+                     clipboard glyph, and no tooltip: the bar is a single obvious button. -->
                 <Button x:Name="ClipboardButton"
-                        Width="34"
-                        Height="30"
+                        Width="32"
+                        Height="28"
                         Padding="0"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
                         Focusable="False"
-                        ToolTip="剪贴板历史"
-                        AutomationProperties.Name="剪贴板历史"
+                        AutomationProperties.Name="ClipBar 浮动按钮"
                         Click="ClipboardButton_Click">
-                    <ui:SymbolIcon Symbol="Clipboard24"
-                                   FontSize="16"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <Image Source="pack://application:,,,/Assets/app.png"
+                           Width="22"
+                           Height="22"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
                 </Button>
             </StackPanel>
         </Border>

@@ -53,6 +53,28 @@ public class NativeFloatingSettingsTests
     }
 
     [Fact]
+    public void ChangingAFloatingSettingMakesTheFormDirty()
+    {
+        // The settings window's Apply button lights up through ContentEquals; a field that is
+        // missing from that comparison leaves the button grey and the edit unsaveable.
+        var baseline = new AppSettings().Normalize();
+
+        var toggled = baseline.Clone();
+        toggled.NativeFloatingEnabled = !baseline.NativeFloatingEnabled;
+        Assert.False(baseline.ContentEquals(toggled));
+
+        var hold = baseline.Clone();
+        hold.HoldDurationMs = 900;
+        Assert.False(baseline.ContentEquals(hold));
+
+        var drag = baseline.Clone();
+        drag.InvokeOnDrag = !baseline.InvokeOnDrag;
+        Assert.False(baseline.ContentEquals(drag));
+
+        Assert.True(baseline.ContentEquals(baseline.Clone()));
+    }
+
+    [Fact]
     public void CloneKeepsTheFloatingSettings()
     {
         var clone = new AppSettings

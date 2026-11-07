@@ -53,8 +53,8 @@ public partial class FloatingActionBarWindow : Window
         // Fixed DIP size: measuring the content produced a bar that shrank or grew with the
         // window DPI (27x25 DIP at 200%), which left a much smaller target than SnipDo's 40 DIP
         // bar. A constant size keeps the hit area and the look identical on every monitor.
-        var width = double.IsNaN(Width) ? 46 : Width;
-        var height = double.IsNaN(Height) ? 42 : Height;
+        var width = double.IsNaN(Width) ? 40 : Width;
+        var height = double.IsNaN(Height) ? 36 : Height;
         var anchorX = screenPoint.X / scale;
         var anchorY = screenPoint.Y / scale;
 

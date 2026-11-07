@@ -24,8 +24,11 @@ namespace ClipBar.App;
 /// </summary>
 public partial class CompactPanelWindow : Window
 {
-    /// <summary>How many rows the compact list shows; it is a quick picker, not the full panel.</summary>
-    private const int MaxRows = 12;
+    /// <summary>
+    /// Ceiling for one load; the real limit comes from the user's "最多保存" setting, so the
+    /// compact list shows the same history as the panel rather than an arbitrary 12 rows.
+    /// </summary>
+    private const int MaxRowsCeiling = 5000;
 
     private const double ScreenMargin = 6;
 
@@ -112,12 +115,13 @@ public partial class CompactPanelWindow : Window
         _target = target;
         _noActivate = noActivate;
 
+        var limit = Math.Clamp(_settings().MaxItems, 10, MaxRowsCeiling);
         var rows = await _repository
-            .QueryAsync(ClipFilter.All, search: null, limit: MaxRows)
+            .QueryAsync(ClipFilter.All, search: null, limit: limit)
             .ConfigureAwait(true);
 
         RowPanel.Children.Clear();
-        foreach (var item in rows.Take(MaxRows))
+        foreach (var item in rows)
         {
             RowPanel.Children.Add(BuildRow(item));
         }
@@ -217,6 +221,21 @@ public partial class CompactPanelWindow : Window
     }
 
     private FrameworkElement BuildRow(ClipItem item)
+    {
+        // Row + hairline, matching the panel's card separators: without it a list of similar
+        // one-line clips read as a single block.
+        var host = new System.Windows.Controls.StackPanel();
+        host.Children.Add(BuildRowContent(item));
+        host.Children.Add(new System.Windows.Controls.Border
+        {
+            Height = 1,
+            Margin = new Thickness(10, 0, 10, 0),
+            Background = ThemeBrushes.Resolve("DividerStrokeColorDefaultBrush", ThemeBrushes.Divider),
+        });
+        return host;
+    }
+
+    private FrameworkElement BuildRowContent(ClipItem item)
     {
         var content = new Grid();
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

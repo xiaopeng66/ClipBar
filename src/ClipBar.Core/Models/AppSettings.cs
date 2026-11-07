@@ -1,4 +1,4 @@
-namespace ClipBar.Core.Models;
+﻿namespace ClipBar.Core.Models;
 
 public sealed class AppSettings
 {
@@ -211,6 +211,12 @@ public sealed class AppSettings
             && left.CaptureImages == right.CaptureImages
             && left.CaptureFiles == right.CaptureFiles
             && left.CaptureHtml == right.CaptureHtml
+            && left.NativeFloatingEnabled == right.NativeFloatingEnabled
+            && left.InvokeOnDrag == right.InvokeOnDrag
+            && left.HoldDurationMs == right.HoldDurationMs
+            && left.DragThresholdPx == right.DragThresholdPx
+            && left.HoverExpandMs == right.HoverExpandMs
+            && left.FloatingAutoHideMs == right.FloatingAutoHideMs
             && left.ExcludedApps.Count == right.ExcludedApps.Count
             && left.ExcludedApps
                 .Zip(right.ExcludedApps)

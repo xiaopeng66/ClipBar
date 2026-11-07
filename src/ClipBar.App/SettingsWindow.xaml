@@ -197,7 +197,7 @@
                                Margin="0,0,0,8"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                     <CheckBox x:Name="NativeFloatingCheck" Content="启用原生浮动剪贴板" Margin="0,0,0,8" />
-                    <CheckBox x:Name="InvokeOnDragCheck" Content="拖选文字后也显示浮动按钮" Margin="0,0,0,10" />
+                    <CheckBox x:Name="InvokeOnDragCheck" Content="拖选文字后也显示浮动按钮（快速打开剪贴板列表）" Margin="0,0,0,10" />
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />

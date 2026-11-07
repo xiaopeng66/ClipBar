@@ -228,6 +228,11 @@ public sealed class PasteService
             return PasteOutcome.CopiedOnly;
         }
 
+        // Give the target a beat to restore its focused child: a popup that was just closed can
+        // leave the window active while its edit control is not yet the focus target, and the
+        // Ctrl+V then lands nowhere (measured with the compact list over a WinForms text box).
+        await Task.Delay(60).ConfigureAwait(true);
+
         try
         {
             _input.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_V);
