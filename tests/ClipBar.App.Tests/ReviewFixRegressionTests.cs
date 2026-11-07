@@ -677,6 +677,31 @@ public class ReviewFixRegressionTests
         Assert.Equal(0, await repository.CountAsync());
     });
 
+    [Fact]
+    public void RefreshDoesNotAutoSelectTheNewestRow() => RunOnUiThread(async () =>
+    {
+        using var workspace = new Workspace();
+        var repository = new SqliteClipRepository(workspace.DatabasePath);
+        await repository.InitializeAsync();
+        await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = "newest" });
+
+        var vm = await NewViewModelAsync(workspace, repository);
+        Assert.Single(vm.Items);
+
+        // A refresh (happens on every capture and every panel show) must not paint a selection
+        // the user never made; the old fallback to Items.FirstOrDefault() did exactly that.
+        Assert.Null(vm.SelectedItem);
+
+        await repository.AddOrTouchAsync(new ClipItem { Kind = ClipKind.Text, Text = "newer" });
+        await vm.RefreshAsync();
+        Assert.Null(vm.SelectedItem);
+
+        // An explicit selection still survives a refresh while its row exists.
+        vm.SelectedItem = vm.Items.First(x => x.Model.Text == "newest");
+        await vm.RefreshAsync();
+        Assert.Equal("newest", vm.SelectedItem?.Model.Text);
+    });
+
     // ---- F-08: long menus are bounded and scroll -----------------------------
 
     [Fact]

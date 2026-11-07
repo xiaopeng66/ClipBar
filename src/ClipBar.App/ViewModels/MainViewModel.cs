@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.ComponentModel;
 using System.Windows.Data;
@@ -515,7 +515,12 @@ public sealed partial class MainViewModel : ObservableObject
         CountText = $"{Items.Count} 项";
         HotkeyText = _settings().Hotkey;
 
-        SelectedItem = Items.FirstOrDefault(x => x.Id == selectedId) ?? Items.FirstOrDefault();
+        // Only restore a selection that already existed. The old "?? Items.FirstOrDefault()"
+        // fallback re-selected the newest row on every refresh (every capture, every show),
+        // which painted a highlight the user never asked for and read as a stuck hover state.
+        // Keyboard use is unaffected: Down selects the first row on demand and Enter with no
+        // selection is a no-op.
+        SelectedItem = selectedId is null ? null : Items.FirstOrDefault(x => x.Id == selectedId);
     }
 
     private async Task RefreshDebouncedAsync()
