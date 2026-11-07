@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -12,7 +12,7 @@ using Wpf.Ui.Controls;
 
 namespace ClipBar.App;
 
-public partial class MainWindow : FluentWindow
+public partial class MainWindow : Window
 {
     /// <summary>
     /// How image clips are previewed: "Large" fills the card's content width, "Medium" caps the
@@ -881,6 +881,28 @@ public partial class MainWindow : FluentWindow
         // Fix the system border colour so an inactive frame cannot turn into a light line; the
         // acrylic surface stays the window background.
         NativeMethods.SetBorderColor(hwnd, 0x00202020);
+        NativeMethods.SetRoundCorners(hwnd);
+
+        // The WPF-UI FluentWindow internals applied the acrylic backdrop and the resize chrome;
+        // with the plain Window both are explicit. CaptionHeight stays 0: the panel is never
+        // dragged by a title bar (it has its own placement modes), so the caption can never
+        // turn into a draggable native title area.
+        System.Windows.Shell.WindowChrome.SetWindowChrome(this, new System.Windows.Shell.WindowChrome
+        {
+            CaptionHeight = 0,
+            ResizeBorderThickness = new Thickness(6),
+            GlassFrameThickness = new Thickness(0),
+            UseAeroCaptionButtons = false,
+        });
+        try
+        {
+            WindowBackdrop.ApplyBackdrop(this, WindowBackdropType.Acrylic);
+        }
+        catch (Exception ex)
+        {
+            // Losing the acrylic is cosmetic; the panel surface brush still paints.
+            AppLog.Error("Apply panel acrylic", ex);
+        }
 
         var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
         DpiScale = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;

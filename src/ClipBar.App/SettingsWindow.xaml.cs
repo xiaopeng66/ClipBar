@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -14,7 +14,7 @@ using Wpf.Ui.Controls;
 
 namespace ClipBar.App;
 
-public partial class SettingsWindow : FluentWindow
+public partial class SettingsWindow : Window
 {
     private readonly Func<AppSettings> _settings;
     private readonly Func<AppSettings, (bool Success, string Message)> _save;
@@ -42,6 +42,21 @@ public partial class SettingsWindow : FluentWindow
         // frame's default (light, state-dependent) border — the same edge the tray menu showed
         // over the taskbar. The panel has pinned this colour since its own fix.
         FrameBorder.Pin(this);
+        SourceInitialized += (_, _) =>
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            NativeMethods.SetRoundCorners(hwnd);
+
+            // The window stays resizable without a native caption: WindowChrome supplies the
+            // resize border while CaptionHeight=0 keeps any title-bar hit-test area away.
+            System.Windows.Shell.WindowChrome.SetWindowChrome(this, new System.Windows.Shell.WindowChrome
+            {
+                CaptionHeight = 0,
+                ResizeBorderThickness = new Thickness(6),
+                GlassFrameThickness = new Thickness(0),
+                UseAeroCaptionButtons = false,
+            });
+        };
         _settings = settings;
         _save = save;
         _clear = clear;
@@ -132,6 +147,17 @@ public partial class SettingsWindow : FluentWindow
 
         base.OnPreviewKeyDown(e);
     }
+
+    /// <summary>Custom title row: the FluentWindow caption is gone with the template.</summary>
+    private void TitleDrag_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     protected override void OnClosing(CancelEventArgs e)
     {

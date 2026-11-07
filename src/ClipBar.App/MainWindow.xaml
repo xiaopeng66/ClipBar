@@ -1,8 +1,9 @@
-﻿<ui:FluentWindow x:Class="ClipBar.App.MainWindow"
+<Window x:Class="ClipBar.App.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:services="clr-namespace:ClipBar.App.Services"
+                 xmlns:platform="clr-namespace:ClipBar.App.Platform"
                  Title="ClipBar"
                  Width="420"
                  Height="620"
@@ -15,9 +16,6 @@
                  Topmost="True"
                  Background="Transparent"
                  AllowsTransparency="False"
-                 WindowBackdropType="Acrylic"
-                 WindowCornerPreference="Round"
-                 ExtendsContentIntoTitleBar="True"
                  FontFamily="Segoe UI Variable Text, Segoe UI"
                  FontSize="13"
                  TextOptions.TextFormattingMode="Ideal"
@@ -25,10 +23,11 @@
                  UseLayoutRounding="True"
                  SnapsToDevicePixels="True"
                  Activated="Window_Activated"
+                 services:ThemeService.DeclaredBackdrop="Acrylic"
                  Deactivated="Window_Deactivated"
                  PreviewKeyDown="Window_PreviewKeyDown">
 
-    <ui:FluentWindow.Resources>
+    <Window.Resources>
         <!-- The stock ListBox template floats its scrollbar over the item area: the thumb
              drew on top of the card's right edge, and because the cards ran to the list's
              right edge while being inset on the left, the left margin looked wider than the
@@ -274,7 +273,7 @@
             </Setter>
         </Style>
 
-    </ui:FluentWindow.Resources>
+    </Window.Resources>
 
     <Grid x:Name="RootPanel"
           PreviewMouseLeftButtonDown="Panel_PreviewMouseLeftButtonDown"
@@ -685,4 +684,4 @@
             </Grid>
         </Border>
     </Grid>
-</ui:FluentWindow>
+</Window>

@@ -9,6 +9,27 @@ namespace ClipBar.App.Services;
 public static class ThemeService
 {
     /// <summary>
+    /// Attached property declaring which WPF-UI backdrop a window wants (None for windows that
+    /// paint their surface from AppSurfaceBrush). The windows are plain Windows, not WPF-UI
+    /// FluentWindows: the FluentWindow template comes from the Application theme dictionary, and
+    /// when a window is created during a dictionary swap the style resolved to nothing — no
+    /// WindowChrome, and DWM painted a native system-themed caption over the content. Plain
+    /// Window + explicit backing calls remove that failure class.
+    /// </summary>
+    public static readonly DependencyProperty DeclaredBackdropProperty =
+        DependencyProperty.RegisterAttached(
+            "DeclaredBackdrop",
+            typeof(WindowBackdropType),
+            typeof(ThemeService),
+            new PropertyMetadata(WindowBackdropType.None));
+
+    public static WindowBackdropType GetDeclaredBackdrop(Window window)
+        => (WindowBackdropType)window.GetValue(DeclaredBackdropProperty);
+
+    public static void SetDeclaredBackdrop(Window window, WindowBackdropType value)
+        => window.SetValue(DeclaredBackdropProperty, value);
+
+    /// <summary>
     /// Light-mode replacements for the Fluent brushes that are too faint to read on a bright
     /// background: 6% black strokes and 45% black tertiary text nearly disappear. The values are
     /// pushed into Application.Resources, which shadows the merged theme dictionary, so every
@@ -132,15 +153,20 @@ public static class ThemeService
                 continue;
             }
 
-            if (window is not FluentWindow fluent
-                || fluent.WindowBackdropType == WindowBackdropType.None)
+            if (window is not Window w)
+            {
+                continue;
+            }
+
+            var declared = GetDeclaredBackdrop(w);
+            if (declared == WindowBackdropType.None)
             {
                 continue;
             }
 
             try
             {
-                WindowBackdrop.ApplyBackdrop(window, fluent.WindowBackdropType);
+                WindowBackdrop.ApplyBackdrop(w, declared);
             }
             catch (Exception ex)
             {
@@ -257,7 +283,7 @@ public static class ThemeService
 
         foreach (Window window in windows)
         {
-            if (window is FluentWindow fluent && fluent.WindowBackdropType != WindowBackdropType.None)
+            if (GetDeclaredBackdrop(window) != WindowBackdropType.None)
             {
                 continue;
             }

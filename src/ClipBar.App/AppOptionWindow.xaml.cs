@@ -1,5 +1,6 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using ClipBar.App.Platform;
 using ClipBar.App.Services;
 using ClipBar.Core.Models;
@@ -11,18 +12,19 @@ namespace ClipBar.App;
 /// Asks for the values a SnipDo action declares under "options" before running it.
 /// SnipDo shows one selector per option, labelled by the dictionary key.
 /// </summary>
-public partial class AppOptionWindow : FluentWindow
+public partial class AppOptionWindow : Window
 {
     private readonly List<(SnipDoAppOption Option, ComboBox Box)> _selectors = [];
 
     public AppOptionWindow(SnipDoAction action, IEnumerable<SnipDoAppOption> options)
     {
         InitializeComponent();
-        ThemeService.RestoreBackdropsWhenLoaded(this);
         // White-edge fix: pin the DWM border like the panel/menus do, so the system frame's
         // default light border cannot outline this window (FrameBorder re-pins on every
         // activation transition, which repaints the frame).
         FrameBorder.Pin(this);
+        SourceInitialized += (_, _) => NativeMethods.SetRoundCorners(
+            new System.Windows.Interop.WindowInteropHelper(this).Handle);
 
         // F-09: SizeToContent=Height alone let 24 selectors push the window past the work
         // area, putting later options and the 运行/取消 buttons off-screen. The selector area
@@ -72,6 +74,17 @@ public partial class AppOptionWindow : FluentWindow
 
     /// <summary>Values chosen by the user, keyed by option identifier.</summary>
     public IReadOnlyDictionary<string, string> Result { get; private set; } = new Dictionary<string, string>();
+
+    /// <summary>Custom title row: the FluentWindow caption is gone with the template.</summary>
+    private void TitleDrag_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Run_Click(object sender, RoutedEventArgs e)
     {

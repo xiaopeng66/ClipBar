@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using ClipBar.App.Platform;
@@ -11,13 +11,12 @@ namespace ClipBar.App;
 /// In-app confirmation / notice dialog. Replaces the native Win32 MessageBox, whose grey
 /// bevel-and-OK button chrome looks foreign next to the Fluent panel and settings window.
 /// </summary>
-public partial class FluentMessageWindow : FluentWindow
+public partial class FluentMessageWindow : Window
 {
     private FluentMessageWindow()
     {
         InitializeComponent();
         SourceInitialized += (_, _) => ApplyToolWindowStyle();
-        ThemeService.RestoreBackdropsWhenLoaded(this);
     }
 
     /// <summary>
@@ -131,6 +130,7 @@ public partial class FluentMessageWindow : FluentWindow
         // Same policy as the menus/panel: draw the surface ourselves, so a temporary
         // active/inactive change cannot repaint a system frame over the panel behind it.
         NativeMethods.SetNonClientRendering(hwnd, enabled: false);
+        NativeMethods.SetRoundCorners(hwnd);
 
         // White-edge fix (same as the tray menu): COLOR_NONE left the frame transparent and
         // the desktop shone through as a light band. Pin it like the panel does.

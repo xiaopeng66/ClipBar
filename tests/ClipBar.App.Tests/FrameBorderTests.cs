@@ -178,4 +178,52 @@ public class FrameBorderTests
             }
         });
     }
+
+    /// <summary>
+    /// Every own-surface window must be a plain Window: one FluentWindow left behind keeps one
+    /// caption-race instance alive (the user hit the same light caption on the confirm dialog
+    /// after the tray menu was fixed).
+    /// </summary>
+    [Fact]
+    public void AllAppSurfacesArePlainWindows()
+    {
+        RunOnUiThread(async () =>
+        {
+            await Task.Yield();
+
+            var menu = TrayMenuWindow.Create([TrayMenuEntry.Item("entry", () => { })]);
+            var options = new[]
+            {
+                new SnipDoAppOption
+                {
+                    Identifier = "value",
+                    Values = new Dictionary<string, string> { ["a"] = "1" },
+                },
+            };
+            var optionWindow = new AppOptionWindow(
+                new SnipDoAction { Title = "With options", Url = "https://example.com/" }, options);
+
+            try
+            {
+                foreach (var window in new Window[] { menu, optionWindow })
+                {
+                    Assert.IsNotType<Wpf.Ui.Controls.FluentWindow>(window);
+                    Assert.Equal(WindowStyle.None, window.WindowStyle);
+                }
+            }
+            finally
+            {
+                menu.Close();
+                optionWindow.Close();
+            }
+
+            // The remaining surfaces are checked structurally through their generated types.
+            Assert.True(!typeof(Wpf.Ui.Controls.FluentWindow).IsAssignableFrom(typeof(MainWindow)),
+                "MainWindow must not derive from FluentWindow");
+            Assert.True(!typeof(Wpf.Ui.Controls.FluentWindow).IsAssignableFrom(typeof(SettingsWindow)),
+                "SettingsWindow must not derive from FluentWindow");
+            Assert.True(!typeof(Wpf.Ui.Controls.FluentWindow).IsAssignableFrom(typeof(FluentMessageWindow)),
+                "FluentMessageWindow must not derive from FluentWindow");
+        });
+    }
 }
