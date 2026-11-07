@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -45,6 +45,13 @@ public partial class TrayMenuWindow : Window
     // automation harness), so every close trigger checks this flag first.
     private bool _closing;
 
+    /// <summary>
+    /// Dismisses a mouse-opened menu on any click outside it. The menu is WS_EX_NOACTIVATE on
+    /// purpose (the panel keeps the foreground), so it never receives Deactivated and the
+    /// window used to stay on screen when the user clicked elsewhere.
+    /// </summary>
+    private OutsideClickHook? _outsideClick;
+
     /// <summary>True once the window started closing; a queued ShowAt must not resurrect it.</summary>
     public bool IsClosingOrClosed => _closing;
 
@@ -52,7 +59,12 @@ public partial class TrayMenuWindow : Window
     {
         InitializeComponent();
         SourceInitialized += (_, _) => ApplyToolWindowStyle();
-        Closed += (_, _) => _closing = true;
+        Closed += (_, _) =>
+        {
+            _closing = true;
+            _outsideClick?.Dispose();
+            _outsideClick = null;
+        };
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -274,6 +286,24 @@ public partial class TrayMenuWindow : Window
         Topmost = true;
         FlashFreeShow.Prepare(this, OnFirstFrameShown);
         Show();
+
+        if (_noActivate)
+        {
+            // No activation means no Deactivated; watch the mouse instead. A click that is not
+            // inside our rect (including one on the panel or the taskbar) closes the menu.
+            var hwnd = new WindowInteropHelper(this).Handle;
+            _outsideClick = OutsideClickHook.StartForPopup(
+                () => !_closing && IsVisible,
+                (x, y) => IsPointInside(hwnd, x, y),
+                () =>
+                {
+                    if (!_closing)
+                    {
+                        AppLog.Write("Tray menu closed by outside click");
+                        Close();
+                    }
+                });
+        }
     }
 
     /// <summary>
@@ -339,6 +369,17 @@ public partial class TrayMenuWindow : Window
         }
 
         MenuScroll.MaxHeight = maxHeight;
+    }
+
+    /// <summary>True when a physical screen point falls inside the window's client frame.</summary>
+    private static bool IsPointInside(IntPtr hwnd, int x, int y)
+    {
+        if (hwnd == IntPtr.Zero || !NativeMethods.GetWindowRect(hwnd, out var rect))
+        {
+            return false;
+        }
+
+        return x >= rect.Left && x < rect.Right && y >= rect.Top && y < rect.Bottom;
     }
 
     /// <summary>Monitor work area converted to DIPs with the monitor's own scale.</summary>

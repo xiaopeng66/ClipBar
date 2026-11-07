@@ -21,15 +21,19 @@ public sealed class OutsideClickHook : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly Func<bool> _isActive;
     private readonly Action _dismiss;
+
+    /// <summary>When set, a click inside this predicate is kept (popup variant).</summary>
+    private readonly Func<int, int, bool>? _isInside;
     private readonly uint _processId;
     private readonly IntPtr _hook;
     private bool _disposed;
 
-    private OutsideClickHook(Func<bool> isActive, Action dismiss)
+    private OutsideClickHook(Func<bool> isActive, Action dismiss, Func<int, int, bool>? isInside = null)
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
         _isActive = isActive;
         _dismiss = dismiss;
+        _isInside = isInside;
         _processId = (uint)Environment.ProcessId;
         _proc = HookProc;
         _hook = NativeMethods.SetWindowsHookEx(
@@ -57,6 +61,16 @@ public sealed class OutsideClickHook : IDisposable
     public static OutsideClickHook Start(Func<bool> isActive, Action dismiss)
         => new(isActive, dismiss);
 
+    /// <summary>
+    /// Popup variant: reports every click whose point is outside the popup's own window rect,
+    /// including clicks on other windows of this process and on non-activating shell surfaces
+    /// (taskbar, desktop). This is what a <c>WS_EX_NOACTIVATE</c> menu needs: it never becomes
+    /// active, so <c>Deactivated</c> never fires and the menu used to stay on screen until an
+    /// item was chosen.
+    /// </summary>
+    public static OutsideClickHook StartForPopup(Func<bool> isActive, Func<int, int, bool> isInside, Action dismiss)
+        => new(isActive, dismiss, isInside);
+
     public void Dispose()
     {
         if (_disposed)
@@ -81,11 +95,22 @@ public sealed class OutsideClickHook : IDisposable
             && _isActive())
         {
             var info = Marshal.PtrToStructure<NativeMethods.MsLlHookStruct>(lParam);
-            var hit = NativeMethods.WindowFromPoint(new NativeMethods.Point(info.X, info.Y));
-            NativeMethods.GetWindowThreadProcessId(hit, out var hitPid);
-            if (hitPid != _processId)
+            if (_isInside is { } inside)
             {
-                _dispatcher.BeginInvoke(_dismiss, DispatcherPriority.Send);
+                // Popup variant: keep the click only when it lands on the popup itself.
+                if (!inside(info.X, info.Y))
+                {
+                    _dispatcher.BeginInvoke(_dismiss, DispatcherPriority.Send);
+                }
+            }
+            else
+            {
+                var hit = NativeMethods.WindowFromPoint(new NativeMethods.Point(info.X, info.Y));
+                NativeMethods.GetWindowThreadProcessId(hit, out var hitPid);
+                if (hitPid != _processId)
+                {
+                    _dispatcher.BeginInvoke(_dismiss, DispatcherPriority.Send);
+                }
             }
         }
 

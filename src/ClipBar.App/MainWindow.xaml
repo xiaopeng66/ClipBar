@@ -511,13 +511,13 @@
                                                     Height="40"
                                                     Margin="0,0,10,0"
                                                     CornerRadius="8"
-                                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                    Background="{DynamicResource IconBadgeBrush}"
                                                     VerticalAlignment="Center"
                                                     ClipToBounds="True">
                                                 <Grid>
                                                     <ui:SymbolIcon Symbol="{Binding IconSymbol}"
                                                                    FontSize="18"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center"
                                                                    Visibility="{Binding ShowIconSymbol, Converter={StaticResource BoolToVisibility}}" />

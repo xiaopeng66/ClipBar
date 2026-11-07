@@ -237,6 +237,16 @@ public static class ThemeService
         // A higher layer opacity in light mode lets the theme surface dominate the blend.
         resources["SurfaceLayerOpacity"] = theme == ApplicationTheme.Light ? 0.96d : 0.88d;
 
+        // The icon tile behind each history row's glyph. The stock ControlFillColorSecondary
+        // is a near-white wash on the light theme, so the badge (and the glyph on it) almost
+        // disappeared; both themes get an explicit tile that contrasts with the surface.
+        var badge = theme == ApplicationTheme.Light
+            ? Color.FromRgb(0xE6, 0xE6, 0xE6)
+            : Color.FromRgb(0x2E, 0x2E, 0x2E);
+        var badgeBrush = new SolidColorBrush(badge);
+        badgeBrush.Freeze();
+        resources["IconBadgeBrush"] = badgeBrush;
+
         // Whichever ramp is not active has to be dropped again, otherwise the previous theme's
         // brushes would keep shadowing the newly applied theme dictionary.
         var stale = theme == ApplicationTheme.Light ? DarkOverrides : LightOverrides;

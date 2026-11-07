@@ -36,6 +36,12 @@ public partial class CompactPanelWindow : Window
     private bool _closing;
     private bool _pasting;
 
+    /// <summary>
+    /// Safety net for the case where Activate() did not take (another app holds the foreground):
+    /// Deactivated would never fire, so a click outside is watched directly.
+    /// </summary>
+    private OutsideClickHook? _outsideClick;
+
     public CompactPanelWindow(
         IClipRepository repository,
         PasteService pasteService,
@@ -46,7 +52,12 @@ public partial class CompactPanelWindow : Window
         _pasteService = pasteService;
         _settings = settings;
         SourceInitialized += (_, _) => ApplyToolWindowStyle();
-        Closed += (_, _) => _closing = true;
+        Closed += (_, _) =>
+        {
+            _closing = true;
+            _outsideClick?.Dispose();
+            _outsideClick = null;
+        };
     }
 
     /// <summary>Fills the list and shows the popup next to the cursor.</summary>
@@ -81,6 +92,18 @@ public partial class CompactPanelWindow : Window
         PlaceNearCursor();
         Show();
         Activate();
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        _outsideClick = OutsideClickHook.StartForPopup(
+            () => !_closing && !_pasting && IsVisible,
+            (x, y) => IsPointInside(hwnd, x, y),
+            () =>
+            {
+                if (!_closing && !_pasting)
+                {
+                    Close();
+                }
+            });
     }
 
     /// <summary>The last non-self window this app pasted into, for targets like SnipDo's toolbar.</summary>
@@ -248,6 +271,16 @@ public partial class CompactPanelWindow : Window
     {
         NativeMethods.GetWindowThreadProcessId(hwnd, out var processId);
         return processId;
+    }
+
+    private static bool IsPointInside(IntPtr hwnd, int x, int y)
+    {
+        if (hwnd == IntPtr.Zero || !NativeMethods.GetWindowRect(hwnd, out var rect))
+        {
+            return false;
+        }
+
+        return x >= rect.Left && x < rect.Right && y >= rect.Top && y < rect.Bottom;
     }
 
     /// <summary>Places the list next to the pointer, clamped to the monitor's work area.</summary>
