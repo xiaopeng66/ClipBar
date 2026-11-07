@@ -15,7 +15,7 @@
                  TextOptions.TextFormattingMode="Ideal"
                  TextOptions.TextRenderingMode="ClearType"
                  UseLayoutRounding="True">
-    <Grid>
+    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
         <!-- Same layered surface as the panel/dialogs: without the app-theme background this
              window rendered the raw Mica backdrop, which follows the SYSTEM theme — a light-theme
              app showed a dark options window (D-A-03). -->

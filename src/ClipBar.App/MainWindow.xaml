@@ -276,6 +276,7 @@
     </Window.Resources>
 
     <Grid x:Name="RootPanel"
+           TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
           PreviewMouseLeftButtonDown="Panel_PreviewMouseLeftButtonDown"
           Background="Transparent">
 

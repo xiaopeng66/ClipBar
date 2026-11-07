@@ -72,7 +72,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
