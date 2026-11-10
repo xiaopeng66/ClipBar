@@ -1,0 +1,87 @@
+<Window x:Class="ClipBar.App.FluentMessageWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="ClipBar"
+                 Width="360"
+                 MinWidth="0"
+                 MinHeight="0"
+                 SizeToContent="Height"
+                 WindowStartupLocation="CenterOwner"
+                 WindowStyle="None"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 Topmost="True"
+                 Background="{DynamicResource AppSurfaceBrush}"
+                 AllowsTransparency="False"
+                 FontFamily="Segoe UI Variable Text, Segoe UI"
+                 FontSize="13"
+                 TextOptions.TextFormattingMode="Ideal"
+                 TextOptions.TextRenderingMode="ClearType"
+                 UseLayoutRounding="True"
+                 PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <!-- Based on the theme styles: a keyed style with no BasedOn would replace WPF-UI's
+             template and fall back to the stock grey WPF button. -->
+        <Style x:Key="DialogButton" TargetType="ui:Button"
+               BasedOn="{StaticResource {x:Type ui:Button}}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="88" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </Window.Resources>
+
+    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+        <Border CornerRadius="8"
+                Background="{DynamicResource AppSurfaceBrush}"
+                Opacity="{DynamicResource SurfaceLayerOpacity}" />
+        <Border CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
+                Padding="20,16,20,16">
+            <StackPanel>
+                <TextBlock x:Name="HeadingText"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8"
+                           Visibility="Collapsed"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon x:Name="Glyph"
+                                   Symbol="Question24"
+                                   FontSize="20"
+                                   Margin="0,1,12,0"
+                                   VerticalAlignment="Top"
+                                   Foreground="{DynamicResource SystemAccentColorBrush}" />
+                    <TextBlock x:Name="MessageText"
+                               Grid.Column="1"
+                               TextWrapping="Wrap"
+                               LineHeight="20"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                </Grid>
+
+                <StackPanel x:Name="ButtonBar"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,16,0,0">
+                    <ui:Button x:Name="SecondaryButton"
+                               Style="{StaticResource DialogButton}"
+                               Content="取消"
+                               Margin="0,0,8,0"
+                               Click="Secondary_Click" />
+                    <ui:Button x:Name="PrimaryButton"
+                               Style="{StaticResource DialogButton}"
+                               Appearance="Primary"
+                               Content="确定"
+                               Click="Primary_Click" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

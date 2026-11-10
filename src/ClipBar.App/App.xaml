@@ -1,0 +1,73 @@
+<Application x:Class="ClipBar.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:converters="clr-namespace:ClipBar.App.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Our own window surface colour. ThemeService keeps it in sync with the active
+                 theme; transient windows bind to it instead of WPF-UI's ApplicationBackgroundBrush
+                 so the surface can never disagree with our text-colour overrides (the dark theme
+                 used to render white text on WPF-UI's light background after a system theme
+                 switch). -->
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F3F3F3" />
+
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+            <converters:ThumbnailSizeConverter x:Key="ThumbnailSize" />
+            <converters:FilterAppearanceConverter x:Key="FilterAppearance" />
+
+            <Style x:Key="ItemActionButton" TargetType="Button">
+                <Setter Property="Width" Value="26" />
+                <Setter Property="Height" Value="26" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="2,0,0,0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg" CornerRadius="6" Background="Transparent">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background"
+                                            Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bg" Property="Background"
+                                            Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter TargetName="Bg" Property="Background"
+                                            Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsPointerOver}" Value="True">
+                        <Setter Property="Opacity" Value="1" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                        <Setter Property="Opacity" Value="1" />
+                    </DataTrigger>
+                    <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                        <Setter Property="Opacity" Value="1" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

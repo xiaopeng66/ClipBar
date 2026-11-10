@@ -1,0 +1,109 @@
+﻿<Window x:Class="ClipBar.App.FloatingActionBarWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ClipBar"
+        Width="30"
+        Height="30"
+        MinWidth="0"
+        MinHeight="0"
+        SizeToContent="Manual"
+        WindowStartupLocation="Manual"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="Transparent"
+        AllowsTransparency="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontSize="12"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Deactivated="Window_Deactivated"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <!-- No window surface and no frame: the bar is just the app logo. A light surface behind
+         the icon read as a white border around it.
+         The mark is 22 DIP — the size it had inside the bordered version — so it keeps the
+         weight the user approved. The 30 DIP button adds only the click halo around it.
+         Drawn as geometry so the clipboard's thin rules stay crisp at every display scale. -->
+    <Grid>
+        <Button x:Name="ClipboardButton"
+                Width="30"
+                Height="30"
+                Padding="0"
+                Background="Transparent"
+                BorderThickness="0"
+                Focusable="False"
+                AutomationProperties.Name="ClipBar 浮动按钮"
+                Click="ClipboardButton_Click">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Hover"
+                                CornerRadius="7"
+                                Background="Transparent" />
+                        <Viewbox Width="22" Height="22">
+                            <Grid Width="256" Height="256">
+                                <!-- The app mark's blue tile, exactly the source artwork's colours. -->
+                                <Rectangle RadiusX="52" RadiusY="52">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Offset="0" Color="#0A83F2" />
+                                            <GradientStop Offset="1" Color="#005FB9" />
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+                                <!-- The clip at the top of the clipboard. -->
+                                <Rectangle Margin="104,37,0,0"
+                                           Width="49" Height="33"
+                                           RadiusX="13" RadiusY="13"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="White" />
+                                <Rectangle Margin="70,52,0,0"
+                                           Width="117" Height="160"
+                                           RadiusX="17" RadiusY="17"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="White" />
+                                <Rectangle Margin="116,50,0,0"
+                                           Width="25" Height="15"
+                                           RadiusX="7" RadiusY="7"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="#005FB8" />
+                                <Rectangle Margin="88,80,0,0"
+                                           Width="81" Height="111"
+                                           RadiusX="11" RadiusY="11"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="#E8F2FF" />
+                                <Rectangle Margin="102,104,0,0"
+                                           Width="57" Height="8"
+                                           RadiusX="4" RadiusY="4"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="#78A5DC" />
+                                <Rectangle Margin="102,126,0,0"
+                                           Width="57" Height="8"
+                                           RadiusX="4" RadiusY="4"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="#78A5DC" />
+                                <Rectangle Margin="102,148,0,0"
+                                           Width="39" Height="8"
+                                           RadiusX="4" RadiusY="4"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Fill="#78A5DC" />
+                            </Grid>
+                        </Viewbox>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Hover" Property="Background" Value="#22FFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Hover" Property="Background" Value="#33FFFFFF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </Grid>
+</Window>
