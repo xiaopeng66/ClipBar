@@ -2,24 +2,26 @@
   "schemaVersion": 1,
   "version": "1.0.0",
   "tag": "v1.0.0",
-  "sourceCommit": "4acf793b6ff99748c4df7f5f351625c0cf082264",
-  "sourceUrl": "https://github.com/xiaopeng66/ClipBar/tree/4acf793b6ff99748c4df7f5f351625c0cf082264",
+  "sourceCommit": "bc232c7f3f1d285f366731d69d2e89680c473510",
+  "sourceUrl": "https://github.com/xiaopeng66/ClipBar/tree/bc232c7f3f1d285f366731d69d2e89680c473510",
   "assets": {
     "standard": {
       "name": "ClipBar-win-x64.exe",
-      "bytes": 73876084,
-      "sha256": "7c361ff4e8c8a91fd52f1dba4d748a447b2383367894ccfeb9a92337ceb85fc4",
+      "bytes": 73881940,
+      "sha256": "1c0fd6081f092b473d188e76041976df15437d1418d17d11d81ffa7950fb6057",
       "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-win-x64.exe"
     },
     "lite": {
       "name": "ClipBar-lite-win-x64.exe",
-      "bytes": 9734358,
-      "sha256": "95d82a8208c9acb493b5e2a6d86d4adbd5e7887e17e16ce02ed03e75e3a0b37b",
+      "bytes": 9747158,
+      "sha256": "f8afc4d403c93a5fe29c76d7ed7548e74388c8db65229f082665263f7287e131",
       "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-lite-win-x64.exe"
     },
     "checksums": {
       "name": "SHA256SUMS.txt",
-      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/SHA256SUMS.txt"
+      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/SHA256SUMS.txt",
+      "bytes": 177,
+      "sha256": "f56750c5d22893f607c72f5dddf619be81b490018665958207fc1d2dfc8d028c"
     }
   }
 }
