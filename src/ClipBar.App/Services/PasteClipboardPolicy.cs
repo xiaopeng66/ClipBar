@@ -10,8 +10,10 @@ internal static class PasteClipboardPolicy
         IntPtr targetWindow,
         IntPtr foregroundWindow,
         uint writtenSequence,
-        uint currentSequence)
+        uint currentSequence,
+        bool otherKeysDown = false)
         => targetWindow != IntPtr.Zero
             && targetWindow == foregroundWindow
-            && currentSequence == writtenSequence;
+            && currentSequence == writtenSequence
+            && !otherKeysDown;
 }

@@ -194,18 +194,5 @@ public partial class FluentMessageWindow : Window
 
             e.Handled = true;
         }
-        else if (e.Key == System.Windows.Input.Key.Enter)
-        {
-            if (_modal)
-            {
-                DialogResult = true;
-            }
-            else
-            {
-                Close();
-            }
-
-            e.Handled = true;
-        }
     }
 }

@@ -84,7 +84,6 @@ public static class ThemeService
         ("HistorySelectedBrush", Color.FromRgb(0xE4, 0xF1, 0xFF)),
         ("HistorySelectedBorderBrush", Color.FromRgb(0x83, 0xBD, 0xF3)),
         ("HistoryFocusBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
-        ("IconBadgeBrush", Color.FromRgb(0xE8, 0xF2, 0xFF)),
         ("TextBadgeBrush", Color.FromRgb(0xE8, 0xF2, 0xFF)),
         ("ImageBadgeBrush", Color.FromRgb(0xE3, 0xF5, 0xF1)),
         ("FileBadgeBrush", Color.FromRgb(0xFF, 0xF3, 0xD8)),
@@ -137,7 +136,6 @@ public static class ThemeService
         ("HistorySelectedBrush", Color.FromRgb(0x1F, 0x45, 0x69)),
         ("HistorySelectedBorderBrush", Color.FromRgb(0x66, 0xAD, 0xF2)),
         ("HistoryFocusBrush", Color.FromRgb(0x80, 0xBD, 0xFF)),
-        ("IconBadgeBrush", Color.FromRgb(0x1E, 0x3D, 0x5B)),
         ("TextBadgeBrush", Color.FromRgb(0x1E, 0x3D, 0x5B)),
         ("ImageBadgeBrush", Color.FromRgb(0x1D, 0x41, 0x45)),
         ("FileBadgeBrush", Color.FromRgb(0x4B, 0x40, 0x29)),
@@ -331,7 +329,6 @@ public static class ThemeService
             resources["HistorySelectedBrush"] = SystemColors.WindowBrush;
             resources["HistorySelectedBorderBrush"] = SystemColors.HighlightBrush;
             resources["HistoryFocusBrush"] = SystemColors.HighlightBrush;
-            resources["IconBadgeBrush"] = SystemColors.ControlBrush;
             resources["TextBadgeBrush"] = SystemColors.ControlBrush;
             resources["ImageBadgeBrush"] = SystemColors.ControlBrush;
             resources["FileBadgeBrush"] = SystemColors.ControlBrush;
@@ -457,7 +454,7 @@ public static class ThemeService
 
         foreach (Window window in windows)
         {
-            if (GetDeclaredBackdrop(window) != WindowBackdropType.None)
+            if (window.AllowsTransparency || GetDeclaredBackdrop(window) != WindowBackdropType.None)
             {
                 continue;
             }

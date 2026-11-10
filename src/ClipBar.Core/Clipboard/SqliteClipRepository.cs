@@ -231,10 +231,21 @@ public sealed class SqliteClipRepository : IClipRepository
 
         item.UpdatedAt = now;
         item.ImagePath = NormalizeImagePath(item.ImagePath);
-        item.Hash = string.IsNullOrWhiteSpace(item.Hash) ? ClipHash.Compute(item) : item.Hash;
+        var hasStructuredIdentity = item.Kind is ClipKind.Text or ClipKind.Files;
+        item.Hash = hasStructuredIdentity || string.IsNullOrWhiteSpace(item.Hash)
+            ? ClipHash.Compute(item)
+            : item.Hash;
 
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection
+            .BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        if (hasStructuredIdentity)
+        {
+            await UpgradeLegacyHashAsync(connection, transaction, item, cancellationToken).ConfigureAwait(false);
+        }
+
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO clips
                 (id, kind, text, html, image_path, file_paths, source_app, hash, is_pinned,
@@ -269,16 +280,57 @@ public sealed class SqliteClipRepository : IClipRepository
         command.Parameters.AddWithValue("$imageWidth", item.ImageWidth);
         command.Parameters.AddWithValue("$imageHeight", item.ImageHeight);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
-            item.Id = reader.GetString(0);
-            item.IsPinned = reader.GetInt32(1) != 0;
-            item.CreatedAt = reader.GetInt64(2);
-            item.UpdatedAt = reader.GetInt64(3);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                item.Id = reader.GetString(0);
+                item.IsPinned = reader.GetInt32(1) != 0;
+                item.CreatedAt = reader.GetInt64(2);
+                item.UpdatedAt = reader.GetInt64(3);
+            }
         }
 
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return item;
+    }
+
+    private async Task UpgradeLegacyHashAsync(
+        SqliteConnection connection, SqliteTransaction transaction, ClipItem item, CancellationToken cancellationToken)
+    {
+        // The write transaction reserves the database before lookup, so concurrent first touches
+        // cannot both upgrade a legacy row. A matching old hash alone does not prove equal content.
+        await using var lookup = connection.CreateCommand();
+        lookup.Transaction = transaction;
+        lookup.CommandText = """
+            SELECT id, kind, text, html, image_path, file_paths, source_app, hash,
+                   is_pinned, created_at, updated_at, size_bytes, image_width, image_height
+            FROM clips
+            WHERE hash = $legacyHash
+              AND NOT EXISTS (SELECT 1 FROM clips WHERE hash = $hash);
+            """;
+        lookup.Parameters.AddWithValue("$legacyHash", ClipHash.ComputeLegacy(item));
+        lookup.Parameters.AddWithValue("$hash", item.Hash);
+        ClipItem? legacy = null;
+        await using (var reader = await lookup.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                legacy = ReadItem(reader);
+            }
+        }
+
+        if (legacy is null || !ClipHash.HasSameContent(legacy, item))
+        {
+            return;
+        }
+
+        await using var upgrade = connection.CreateCommand();
+        upgrade.Transaction = transaction;
+        upgrade.CommandText = "UPDATE clips SET hash = $hash WHERE id = $id;";
+        upgrade.Parameters.AddWithValue("$hash", item.Hash);
+        upgrade.Parameters.AddWithValue("$id", legacy.Id);
+        await upgrade.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ClipItem>> QueryAsync(

@@ -34,6 +34,8 @@ public sealed class FloatingBarCoordinator : IDisposable
     private readonly DispatcherTimer _gestureTimer;
     private readonly DispatcherTimer _autoHideTimer;
     private readonly SelectionProbe _probe = new();
+    private readonly Func<IntPtr, Task<SelectionProbeResult>> _selectionProbe;
+    private readonly Action<ScreenPoint, IntPtr, bool> _showSelectionBar;
     private readonly TextTargetGate _textGate = new();
     private readonly bool _selfElevated = Elevation.IsSelfElevated();
 
@@ -70,7 +72,7 @@ public sealed class FloatingBarCoordinator : IDisposable
     /// <summary>True once the list warm-up was started for the current press.</summary>
     private bool _prepareKicked;
 
-    /// <summary>Incremented per press so a slow gate result cannot land on a newer gesture.</summary>
+    /// <summary>Invalidates delayed gate, selection and list work when a gesture or bar closes.</summary>
     private int _pressEpoch;
 
     /// <summary>
@@ -110,6 +112,21 @@ public sealed class FloatingBarCoordinator : IDisposable
         Func<bool>? isPointerOverOwnTextInput = null,
         Func<ClipItem, bool>? insertIntoOwnTextInput = null,
         Func<IDisposable>? suppressPanelHide = null)
+        : this(repository, pasteService, settings, mainWindowHandle, isPointerOverOwnTextInput,
+            insertIntoOwnTextInput, suppressPanelHide, selectionProbe: null, selectionBarShown: null)
+    {
+    }
+
+    internal FloatingBarCoordinator(
+        IClipRepository repository,
+        PasteService pasteService,
+        Func<AppSettings> settings,
+        Func<IntPtr> mainWindowHandle,
+        Func<bool>? isPointerOverOwnTextInput,
+        Func<ClipItem, bool>? insertIntoOwnTextInput,
+        Func<IDisposable>? suppressPanelHide,
+        Func<IntPtr, Task<SelectionProbeResult>>? selectionProbe,
+        Action<ScreenPoint, IntPtr, bool>? selectionBarShown)
     {
         _repository = repository;
         _pasteService = pasteService;
@@ -118,6 +135,9 @@ public sealed class FloatingBarCoordinator : IDisposable
         _isPointerOverOwnTextInput = isPointerOverOwnTextInput;
         _insertIntoOwnTextInput = insertIntoOwnTextInput;
         _suppressPanelHide = suppressPanelHide;
+        _selectionProbe = selectionProbe ?? (target => _probe.TryGetSelectionAsync(target, allowClipboardFallback: true));
+        _showSelectionBar = selectionBarShown ?? ((point, target, ownTarget) =>
+            ShowBar(point, fromHold: false, target, ownTarget));
 
         // One frame at 60 Hz: the hold fires on the first tick after its threshold, so the tick
         // interval used to add up to 40 ms to every long-press. Runs only while a button is held
@@ -284,6 +304,7 @@ public sealed class FloatingBarCoordinator : IDisposable
         _targetIsOwnTextInput = inOwnTextInput;
         _target = foreground;
         CloseBar();
+        var epoch = ++_pressEpoch;
 
         // Two-stage gate. The pointer's shape is read right here and is cheap: a standard
         // non-text cursor ends the gesture with no cross-process call at all. Only an I-beam or
@@ -307,7 +328,6 @@ public sealed class FloatingBarCoordinator : IDisposable
             return;
         }
 
-        var epoch = ++_pressEpoch;
         var x = point.X;
         var y = point.Y;
         _ = ResolveTextTargetAsync(cursor, x, y, epoch, inOwnTextInput);
@@ -402,7 +422,7 @@ public sealed class FloatingBarCoordinator : IDisposable
             // about to need exactly that list on hover.
             if (_bar is null)
             {
-                CloseList();
+                CloseBar();
             }
 
             return;
@@ -413,13 +433,20 @@ public sealed class FloatingBarCoordinator : IDisposable
         // semantics anyway.
         if (!_settings().InvokeOnDrag || !resolved || !textTarget)
         {
+            if (_bar is null)
+            {
+                CloseBar();
+            }
+
             return;
         }
 
         var target = _target;
+        var ownTextInput = _targetIsOwnTextInput;
+        var epoch = _pressEpoch;
         var x = point.X;
         var y = point.Y;
-        _ = ProbeAndShowAsync(target, x, y);
+        _ = ProbeAndShowAsync(target, x, y, epoch, ownTextInput);
     }
 
     /// <summary>Alias so the machine's action name stays readable at the call site.</summary>
@@ -466,7 +493,7 @@ public sealed class FloatingBarCoordinator : IDisposable
         {
             _prepareKicked = true;
             _prefetch ??= PrefetchRowsAsync();
-            _ = PrepareListAsync();
+            _ = PrepareListAsync(_pressEpoch, _target, _targetIsOwnTextInput);
         }
 
         var action = _machine.Tick(point.X, point.Y, _clock.ElapsedMilliseconds);
@@ -479,14 +506,12 @@ public sealed class FloatingBarCoordinator : IDisposable
         ShowBar(new ScreenPoint(point.X, point.Y), fromHold: true);
     }
 
-    private async Task ProbeAndShowAsync(IntPtr target, int x, int y)
+    private async Task ProbeAndShowAsync(IntPtr target, int x, int y, int epoch, bool ownTextInput)
     {
         SelectionProbeResult result;
         try
         {
-            result = await _probe
-                .TryGetSelectionAsync(target, allowClipboardFallback: true)
-                .ConfigureAwait(true);
+            result = await _selectionProbe(target).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -494,20 +519,29 @@ public sealed class FloatingBarCoordinator : IDisposable
             return;
         }
 
-        if (!result.HasText || _disposed)
+        if (!result.HasText || !IsCurrentGesture(epoch, target, ownTextInput))
         {
             return;
         }
 
-        ShowBar(new ScreenPoint(x, y), fromHold: false);
+        _showSelectionBar(new ScreenPoint(x, y), target, ownTextInput);
     }
 
+    private bool IsCurrentGesture(int epoch, IntPtr target, bool ownTextInput)
+        => !_disposed
+            && epoch == _pressEpoch
+            && target == _target
+            && ownTextInput == _targetIsOwnTextInput;
+
     private void ShowBar(ScreenPoint point, bool fromHold)
+        => ShowBar(point, fromHold, _target, _targetIsOwnTextInput);
+
+    private void ShowBar(ScreenPoint point, bool fromHold, IntPtr target, bool ownTextInput)
     {
         // A gesture that started in ClipBar's own search box targets this process; the usability
         // guard rejects our own windows, but that check only exists to stop pasting into ourselves
         // by accident. This path is deliberate, and the row click inserts text directly.
-        if (_disposed || (!_targetIsOwnTextInput && !IsUsableTarget(_target)))
+        if (_disposed || (!ownTextInput && !IsUsableTarget(target)))
         {
             return;
         }
@@ -522,28 +556,16 @@ public sealed class FloatingBarCoordinator : IDisposable
             return;
         }
 
-        if (!_targetIsOwnTextInput)
+        if (!ownTextInput)
         {
-            CompactPanelWindow.RememberTarget(_target);
+            CompactPanelWindow.RememberTarget(target);
         }
 
         // Take the bar built at startup if there is one: its handle, template and layout are
         // already done, so the press only pays for parking and showing it.
         var bar = _preparedBar ?? new FloatingActionBarWindow();
         _preparedBar = null;
-        bar.ClipboardRequested += OnClipboardRequested;
-        bar.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_bar, bar))
-            {
-                _bar = null;
-                CloseList();
-                _outsideClick?.Dispose();
-                _outsideClick = null;
-            }
-        };
-
-        _bar = bar;
+        TrackBar(bar);
         _lastAnchor = point;
         _prefetch ??= PrefetchRowsAsync();
         _pointerLeftAtMs = 0;
@@ -551,7 +573,7 @@ public sealed class FloatingBarCoordinator : IDisposable
         // The panel's click-outside hook treats these popups as "outside". Hold the panel open
         // for the pair's lifetime; otherwise a gesture that started in its own search box would
         // hide the panel before the chosen row could be inserted.
-        if (_targetIsOwnTextInput)
+        if (ownTextInput)
         {
             _panelHold?.Dispose();
             _panelHold = _suppressPanelHide?.Invoke();
@@ -573,7 +595,7 @@ public sealed class FloatingBarCoordinator : IDisposable
         if (!_prepareKicked)
         {
             _prepareKicked = true;
-            _ = PrepareListAsync();
+            _ = PrepareListAsync(_pressEpoch, _target, _targetIsOwnTextInput);
         }
         else if (_preparedList is { } prepared)
         {
@@ -585,13 +607,34 @@ public sealed class FloatingBarCoordinator : IDisposable
         }
     }
 
+    private void TrackBar(FloatingActionBarWindow bar)
+    {
+        _bar = bar;
+        bar.ClipboardRequested += OnClipboardRequested;
+        bar.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_bar, bar))
+            {
+                return;
+            }
+
+            _bar = null;
+            CloseBar();
+        };
+    }
+
     /// <summary>
     /// Warms the compact list off the hover path: resolves the prefetch, constructs the window and
     /// lets it build its first rows. Failures are logged and ignored — a hover without a prepared
     /// window still works, it just pays the construction cost.
     /// </summary>
-    private async Task PrepareListAsync()
+    private Task PrepareListAsync()
+        => PrepareListAsync(_pressEpoch, _target, _targetIsOwnTextInput);
+
+    private async Task PrepareListAsync(int epoch, IntPtr target, bool ownTextInput)
     {
+        CompactPanelWindow? list = null;
+        var listClosed = false;
         try
         {
             IReadOnlyList<ClipItem>? rows = null;
@@ -600,20 +643,44 @@ public sealed class FloatingBarCoordinator : IDisposable
                 rows = await prefetch.ConfigureAwait(true);
             }
 
-            // No bar requirement: the warm-up starts during the hold, before the bar exists.
-            // Only a list that is already on screen makes the work pointless.
-            if (_disposed || _list is not null)
+            // Preparation starts during the hold, before the bar exists. A closed/replaced gesture
+            // must not create a window from the old query when it eventually completes.
+            if (!IsCurrentGesture(epoch, target, ownTextInput) || _list is not null)
             {
                 return;
             }
 
-            var list = CreateListWindow();
+            list = CreateListWindow();
+            list.Closed += (_, _) => listClosed = true;
             _preparedList = list;
-            await list.PrepareAsync(_target, rows).ConfigureAwait(true);
+            await list.PrepareAsync(target, rows).ConfigureAwait(true);
 
             // The bar may already be on screen by now; warm the render so the hover is instant.
             // Uses the bar's anchor, i.e. the point the list will appear near.
-            if (_bar is not null && _lastAnchor is { } anchor)
+            var stillOwned = ReferenceEquals(_preparedList, list) || ReferenceEquals(_list, list);
+            if (!IsCurrentGesture(epoch, target, ownTextInput) || !stillOwned)
+            {
+                if (ReferenceEquals(_preparedList, list))
+                {
+                    _preparedList = null;
+                }
+
+                if (!listClosed)
+                {
+                    try
+                    {
+                        list.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Error("Close stale prepared floating list", ex);
+                    }
+                }
+
+                return;
+            }
+
+            if (ReferenceEquals(_preparedList, list) && _bar is not null && _lastAnchor is { } anchor)
             {
                 list.WarmRender(anchor);
             }
@@ -621,6 +688,31 @@ public sealed class FloatingBarCoordinator : IDisposable
         catch (Exception ex)
         {
             AppLog.Error("Prepare floating list", ex);
+            if (list is not null && !listClosed)
+            {
+                if (ReferenceEquals(_preparedList, list))
+                {
+                    _preparedList = null;
+                }
+
+                if (ReferenceEquals(_list, list))
+                {
+                    _list = null;
+                    if (_bar is not null)
+                    {
+                        _bar.IsExpanded = false;
+                    }
+                }
+
+                try
+                {
+                    list.Close();
+                }
+                catch (Exception closeException)
+                {
+                    AppLog.Error("Close failed prepared floating list", closeException);
+                }
+            }
         }
     }
 
@@ -892,6 +984,8 @@ public sealed class FloatingBarCoordinator : IDisposable
     {
         if (!keepWarmUp)
         {
+            ++_pressEpoch;
+            _gestureTimer.Stop();
             _prepareKicked = false;
             _prefetch = null;
         }

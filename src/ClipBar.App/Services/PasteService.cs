@@ -263,9 +263,10 @@ public sealed class PasteService
         // real key is down can reach the target as a different combination (Ctrl+V+Space in a
         // media player may toggle something else). Use a bounded 800 ms wait.
         var keyWaitStart = watch.ElapsedMilliseconds;
-        for (var attempt = 0; attempt < 8 && NativeMethods.IsAnyOtherKeyDown(); attempt++)
+        if (!await WaitForKeyReleaseAsync(NativeMethods.IsAnyOtherKeyDown, Task.Delay).ConfigureAwait(true))
         {
-            await Task.Delay(100).ConfigureAwait(true);
+            AppLog.Write("Paste: physical keys are still held; copied without Ctrl+V");
+            return PasteOutcome.CopiedOnly;
         }
         AppLog.Write($"Paste: key-wait took {watch.ElapsedMilliseconds - keyWaitStart} ms");
 
@@ -277,9 +278,10 @@ public sealed class PasteService
                 targetWindow,
                 NativeMethods.GetForegroundWindow(),
                 clipboardSequence,
-                NativeMethods.GetClipboardSequenceNumber()))
+                NativeMethods.GetClipboardSequenceNumber(),
+                NativeMethods.IsAnyOtherKeyDown()))
         {
-            AppLog.Write("Paste: foreground or clipboard changed before Ctrl+V; paste cancelled");
+            AppLog.Write("Paste: foreground, clipboard or physical keys changed before Ctrl+V; paste cancelled");
             return PasteOutcome.Cancelled;
         }
 
@@ -303,6 +305,16 @@ public sealed class PasteService
         }
 
         return PasteOutcome.Pasted;
+    }
+
+    internal static async Task<bool> WaitForKeyReleaseAsync(Func<bool> anyOtherKeyDown, Func<int, Task> delay)
+    {
+        for (var attempt = 0; attempt < 8 && anyOtherKeyDown(); attempt++)
+        {
+            await delay(100).ConfigureAwait(true);
+        }
+
+        return !anyOtherKeyDown();
     }
 
     /// <summary>

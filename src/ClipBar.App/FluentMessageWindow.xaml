@@ -78,6 +78,7 @@
                     <ui:Button x:Name="PrimaryButton"
                                Style="{StaticResource DialogButton}"
                                Appearance="Primary"
+                               IsDefault="True"
                                Content="确定"
                                Click="Primary_Click" />
                 </StackPanel>

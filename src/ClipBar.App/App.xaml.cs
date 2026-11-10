@@ -521,67 +521,60 @@ public partial class App : Application
 
     private (bool Success, string Message) SaveSettings(AppSettings candidate)
     {
-        candidate.Normalize();
+        var result = new SettingsSaveCoordinator().Save(
+            candidate,
+            registerHotkey: hotkey =>
+            {
+                var registered = _hotkey.Register(hotkey, out var error);
+                return (registered, error);
+            },
+            makeLive: settings => _settings = settings,
+            applyTheme: settings => ThemeService.Apply(settings.Theme),
+            applyStartupEntry: settings =>
+            {
+                var enabled = _startup.SetEnabled(settings.StartWithWindows, StartupArguments);
+                if (!enabled)
+                {
+                    // The registry write can fail (policy/ACL); the next launch reconciles, but say
+                    // so instead of letting settings.json and the registry silently disagree (G-23).
+                    AppLog.Write("Failed to update the startup entry; settings may disagree with the registry");
+                }
+                return enabled;
+            },
+            updateHotkey: settings => _mainWindow?.ViewModel.UpdateHotkey(settings.Hotkey),
+            updateImagePreview: settings =>
+            {
+                // The panel reads the image preview mode through a dependency property so the
+                // per-item size bindings re-run; a plain field would leave the old sizing until
+                // the next restart.
+                if (_mainWindow is { } panel)
+                {
+                    panel.ImagePreviewMode = settings.ImagePreview;
+                    panel.ViewModel.SetImagePreviewMode(settings.ImagePreview);
+                }
+            },
+            applyFloatingSettings: settings =>
+            {
+                // The floating bar is a global input listener: only run it while the user asked for
+                // it, and pick up new timings immediately after saving.
+                if (settings.NativeFloatingEnabled)
+                {
+                    StartFloatingBar();
+                    _floatingBar?.ApplySettings();
+                }
+                else
+                {
+                    StopFloatingBar();
+                }
+            },
+            persistSettings: TrySaveSettings);
 
-        // Register() restores the previous combo itself when the new one is rejected, so a
-        // failed save never leaves the app without a working hotkey.
-        if (!_hotkey.Register(candidate.Hotkey, out var hotkeyError))
+        if (result.Exception is { } exception)
         {
-            return (false, hotkeyError);
+            AppLog.Error("Apply settings side effects", exception);
         }
 
-        _settings = candidate;
-
-        try
-        {
-            // Apply() is a no-op when the theme is unchanged: re-applying it rebuilds every
-            // window's backdrop, which left the acrylic panel painted flat white after a plain
-            // 应用 click.
-            ThemeService.Apply(_settings.Theme);
-            if (!_startup.SetEnabled(_settings.StartWithWindows, StartupArguments))
-            {
-                // The registry write can fail (policy/ACL); the next launch reconciles, but say
-                // so instead of letting settings.json and the registry silently disagree (G-23).
-                AppLog.Write("Failed to update the startup entry; settings may disagree with the registry");
-            }
-            _mainWindow?.ViewModel.UpdateHotkey(_settings.Hotkey);
-
-            // The panel reads the image preview mode through a dependency property so the
-            // per-item size bindings re-run; a plain field would leave the old sizing until the
-            // next restart.
-            if (_mainWindow is { } panel)
-            {
-                panel.ImagePreviewMode = _settings.ImagePreview;
-                panel.ViewModel.SetImagePreviewMode(_settings.ImagePreview);
-            }
-
-            // The floating bar is a global input listener: only run it while the user asked for
-            // it, and pick up new timings immediately after saving.
-            if (_settings.NativeFloatingEnabled)
-            {
-                StartFloatingBar();
-                _floatingBar?.ApplySettings();
-            }
-            else
-            {
-                StopFloatingBar();
-            }
-        }
-        catch (Exception ex)
-        {
-            // The candidate is already live; the caller keeps the form dirty so the state the
-            // user sees is what is running (R12-F-10).
-            AppLog.Error("Apply settings side effects", ex);
-            return (false, "设置已生效，但应用过程中出错：" + ex.Message + "（未写入设置文件，重启后会恢复为修改前的值。）");
-        }
-
-        if (!TrySaveSettings())
-        {
-            // The settings are live in memory either way; just say they will not survive a restart.
-            return (false, "设置已应用，但无法写入设置文件，重启后会丢失。");
-        }
-
-        return (true, string.Empty);
+        return (result.Success, result.Message);
     }
 
     /// <summary>

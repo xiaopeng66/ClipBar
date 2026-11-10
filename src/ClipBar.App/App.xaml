@@ -26,7 +26,6 @@
             <SolidColorBrush x:Key="HistorySelectedBrush" Color="#E4F1FF" />
             <SolidColorBrush x:Key="HistorySelectedBorderBrush" Color="#83BDF3" />
             <SolidColorBrush x:Key="HistoryFocusBrush" Color="#005FB9" />
-            <SolidColorBrush x:Key="IconBadgeBrush" Color="#E8F2FF" />
             <SolidColorBrush x:Key="TextBadgeBrush" Color="#E8F2FF" />
             <SolidColorBrush x:Key="ImageBadgeBrush" Color="#E3F5F1" />
             <SolidColorBrush x:Key="FileBadgeBrush" Color="#FFF3D8" />

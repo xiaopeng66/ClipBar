@@ -54,8 +54,12 @@ public static class ClipboardSourcePolicy
         foreach (var excluded in settings.ExcludedApps)
         {
             // The list is free text: users type "KeePassXC.exe", "keepassxc", or paste a full
-            // path. Compare on the file stem so all three forms work.
-            var name = Path.GetFileNameWithoutExtension(excluded.Trim());
+            // path. Only remove the executable suffix: dots can belong to a bare process name.
+            var name = Path.GetFileName(excluded.Trim());
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name[..^4];
+            }
             if (string.IsNullOrWhiteSpace(name))
             {
                 continue;

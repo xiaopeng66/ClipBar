@@ -29,6 +29,7 @@ public partial class SettingsWindow : Window
     /// the form differs from this, so it doubles as the "you have unapplied edits" indicator.
     /// </summary>
     private AppSettings _applied;
+    private bool _hasUnsavedSettings;
 
     public SettingsWindow(
         Func<AppSettings> settings,
@@ -187,15 +188,14 @@ public partial class SettingsWindow : Window
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-        if (e.Cancel || !HasUnappliedEdits)
+        if (e.Cancel || PendingCloseMessage is not { } message)
         {
             return;
         }
 
-        // Closing would silently discard everything not applied yet — ask first (D-C-02).
         var close = FluentMessageWindow.Confirm(
             this,
-            "设置里有尚未应用的修改，关闭后会丢失。确定关闭吗？",
+            message,
             primary: "关闭",
             secondary: "继续编辑");
         if (!close)
@@ -214,6 +214,14 @@ public partial class SettingsWindow : Window
     /// <summary>True while the form holds unapplied edits. App.ShowPanel hides this window when
     /// the panel opens, and the user should not silently lose track of pending edits (G-11).</summary>
     public bool HasUnappliedEdits => !SameAs(BuildCandidate(), _applied);
+
+    internal string? PendingCloseMessage => _hasUnsavedSettings
+        ? HasUnappliedEdits
+            ? "设置已应用但未能保存，表单中还有尚未应用的修改。关闭后未应用的修改会丢失，当前设置重启后也可能丢失。确定关闭吗？"
+            : "设置已应用但未能保存，重启后可能丢失。确定关闭吗？"
+        : HasUnappliedEdits
+            ? "设置里有尚未应用的修改，关闭后会丢失。确定关闭吗？"
+            : null;
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
@@ -251,6 +259,12 @@ public partial class SettingsWindow : Window
         var result = _save(candidate);
         if (!result.Success)
         {
+            // A rejected hotkey leaves the live values alone; a persistence failure does not.
+            // Keep the form's applied baseline honest without forgetting the restart warning.
+            var live = Normalize(_settings().Clone());
+            _hasUnsavedSettings |= !SameAs(live, _applied);
+            _applied = live;
+            UpdateApplyButton();
             ShowStatus(result.Message);
             return false;
         }
@@ -258,18 +272,20 @@ public partial class SettingsWindow : Window
         // The edits are live now, so the button goes back to its plain outline look. Success needs
         // no message of its own — the button reverting is the feedback.
         _applied = candidate;
+        _hasUnsavedSettings = false;
         HideStatus();
         UpdateApplyButton();
         return true;
     }
 
     /// <summary>
-    /// Reads the form into an <see cref="AppSettings"/> without validating. Returns null only when
-    /// the item count cannot be parsed, which the dirty check treats as "modified".
+    /// Reads the form into an <see cref="AppSettings"/>. Invalid numeric input returns null so
+    /// normalisation cannot make an invalid edit look identical to the applied value.
     /// </summary>
     private AppSettings? BuildCandidate()
     {
-        if (!int.TryParse(MaxItemsBox.Text.Trim(), out var maxItems))
+        if (!int.TryParse(MaxItemsBox.Text.Trim(), out var maxItems) || maxItems is < 10 or > 5000
+            || !int.TryParse(HoldDurationBox.Text.Trim(), out var holdMs) || holdMs is < 200 or > 2000)
         {
             return null;
         }
@@ -297,10 +313,7 @@ public partial class SettingsWindow : Window
         candidate.PanelPositionMode = PanelPositionBox.SelectedValue as string ?? "MonitorCenter";
         candidate.NativeFloatingEnabled = NativeFloatingCheck.IsChecked == true;
         candidate.InvokeOnDrag = InvokeOnDragCheck.IsChecked == true;
-        if (int.TryParse(HoldDurationBox.Text.Trim(), out var holdMs))
-        {
-            candidate.HoldDurationMs = holdMs;
-        }
+        candidate.HoldDurationMs = holdMs;
         candidate.ShowBingSearch = BingSearchCheck.IsChecked == true;
         candidate.PasteOnClick = PasteOnClickCheck.IsChecked == true;
         candidate.KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true;

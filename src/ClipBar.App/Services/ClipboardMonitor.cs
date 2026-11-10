@@ -263,9 +263,20 @@ public sealed class ClipboardMonitor : IDisposable
     /// <see cref="MaxTextLength"/> characters, with no exception and no second copy of the text.
     /// </summary>
     public static (string Text, bool Truncated) ApplyTextCap(string text)
-        => text.Length > MaxTextLength
-            ? (text[..MaxTextLength], true)
-            : (text, false);
+    {
+        if (text.Length <= MaxTextLength)
+        {
+            return (text, false);
+        }
+
+        var length = MaxTextLength;
+        if (char.IsHighSurrogate(text[length - 1]) && char.IsLowSurrogate(text[length]))
+        {
+            length--;
+        }
+
+        return (text[..length], true);
+    }
 
     /// <summary>
     /// Applies <see cref="MaxFilePaths"/>, reporting how many paths were dropped. A shell
@@ -326,7 +337,7 @@ public sealed class ClipboardMonitor : IDisposable
             var html = settings.CaptureHtml ? HtmlFormatHelper.ExtractFragment(GetHtml(data)) : null;
             if (html is not null && html.Length > MaxTextLength)
             {
-                html = html[..MaxTextLength];
+                html = ApplyTextCap(html).Text;
             }
 
             var item = new ClipItem
