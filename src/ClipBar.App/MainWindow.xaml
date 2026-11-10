@@ -4,6 +4,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:services="clr-namespace:ClipBar.App.Services"
                  xmlns:platform="clr-namespace:ClipBar.App.Platform"
+                 xmlns:core="clr-namespace:ClipBar.Core.Models;assembly=ClipBar.Core"
                  Title="ClipBar"
                  Width="420"
                  Height="620"
@@ -139,7 +140,7 @@
                                 Padding="{TemplateBinding Padding}"
                                 BorderThickness="1"
                                 BorderBrush="Transparent"
-                                CornerRadius="8">
+                                CornerRadius="10">
                             <ScrollViewer Style="{StaticResource HistoryScrollViewer}"
                                           Focusable="False"
                                           CanContentScroll="True"
@@ -151,7 +152,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                 <Setter TargetName="ListBorder" Property="BorderBrush"
-                                        Value="{DynamicResource ControlStrongFillColorDefaultBrush}" />
+                                        Value="{DynamicResource HistoryFocusBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -201,42 +202,31 @@
                                  right gutter, so the card edge can sit the same distance from
                                  the panel edge as it does on the left. -->
                             <Border x:Name="Card"
-                                    Margin="12,2"
+                                    Margin="12,3"
                                     Padding="8"
-                                    CornerRadius="8"
+                                    CornerRadius="10"
                                     BorderThickness="1"
-                                    BorderBrush="Transparent"
-                                    Background="Transparent">
+                                    BorderBrush="{DynamicResource HistoryCardBorderBrush}"
+                                    Background="{DynamicResource HistoryCardBrush}">
                                 <ContentPresenter />
                             </Border>
 
-                            <!-- Hairline between neighbouring clips. It is inset to the text edge
-                                 (12 card margin + 8 card padding) so it reads as a divider inside
-                                 the list rather than a border of the card. Full opacity: the
-                                 divider brush is already translucent, and at 0.7 on top of it
-                                 the line was invisible on the acrylic panel. -->
-                            <Border x:Name="Separator"
-                                    Height="1"
-                                    Margin="20,0,20,0"
-                                    VerticalAlignment="Bottom"
-                                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding IsPointerOver}" Value="True">
                                 <Setter TargetName="Card" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource HistoryHoverBrush}" />
                             </DataTrigger>
                             <!-- Keep the hover look while this row's menu covers the pointer. -->
                             <DataTrigger Binding="{Binding IsMenuAnchor}" Value="True">
                                 <Setter TargetName="Card" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource HistoryHoverBrush}" />
                             </DataTrigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Card" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
-                                <!-- The divider under a selected card would cut across the
-                                     highlight; hide it while the row is selected. -->
-                                <Setter TargetName="Separator" Property="Opacity" Value="0" />
+                                        Value="{DynamicResource HistorySelectedBrush}" />
+                                <Setter TargetName="Card" Property="BorderBrush"
+                                        Value="{DynamicResource HistorySelectedBorderBrush}" />
                             </Trigger>
                             <!-- Selection and keyboard focus are independent: only outline the
                                  selected card while the list itself has keyboard focus. -->
@@ -248,7 +238,7 @@
                                                Value="True" />
                                 </MultiDataTrigger.Conditions>
                                 <Setter TargetName="Card" Property="BorderBrush"
-                                        Value="{DynamicResource ControlStrongFillColorDefaultBrush}" />
+                                        Value="{DynamicResource HistoryFocusBrush}" />
                             </MultiDataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -337,14 +327,41 @@
                 <Grid Grid.Row="0"
                       Margin="12,8,10,0">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Border
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="0,0,8,0">
+                        <Border Width="30"
+                                Height="30"
+                                CornerRadius="9"
+                                Background="{DynamicResource LogoBackgroundBrush}">
+                            <ui:SymbolIcon Symbol="Clipboard24"
+                                           FontSize="17"
+                                           Foreground="{DynamicResource LogoForegroundBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" Margin="7,0,0,0">
+                            <TextBlock Text="ClipBar"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <TextBlock Text="剪贴板历史"
+                                       Margin="0,1,0,0"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
                             Height="36"
-                            CornerRadius="8"
+                            CornerRadius="10"
                             Background="{DynamicResource ControlFillColorDefaultBrush}">
                         <Border.Style>
                             <Style TargetType="Border">
@@ -356,7 +373,7 @@
                                          containing field must show keyboard focus itself. -->
                                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                         <Setter Property="BorderBrush"
-                                                Value="{DynamicResource ControlStrongFillColorDefaultBrush}" />
+                                                Value="{DynamicResource HistoryFocusBrush}" />
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
@@ -367,7 +384,7 @@
                                            Margin="10,0,0,0"
                                            HorizontalAlignment="Left"
                                            VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                           Foreground="{DynamicResource BrandStrongBrush}" />
                             <!-- 34 = icon left margin 10 + icon 16 + gap 8; the same 34 keeps the
                                  placeholder on the text baseline. -->
                             <TextBox x:Name="SearchBox"
@@ -395,7 +412,7 @@
                         </Grid>
                     </Border>
 
-                    <Button Grid.Column="1"
+                    <Button Grid.Column="2"
                             Style="{StaticResource IconButton}"
                             Margin="6,0,0,0"
                             Click="Settings_Click"
@@ -404,7 +421,7 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </Button>
 
-                    <Button Grid.Column="2"
+                    <Button Grid.Column="3"
                             Style="{StaticResource IconButton}"
                             Margin="2,0,0,0"
                             Click="Close_Click"
@@ -483,7 +500,7 @@
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Name}"
                                                    Margin="20,10,0,3"
-                                                   FontSize="11"
+                                                   FontSize="12"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </DataTemplate>
@@ -561,10 +578,22 @@
                                             <Border Width="40"
                                                     Height="40"
                                                     Margin="0,0,10,0"
-                                                    CornerRadius="8"
-                                                    Background="{DynamicResource IconBadgeBrush}"
+                                                    CornerRadius="10"
                                                     VerticalAlignment="Center"
                                                     ClipToBounds="True">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="{DynamicResource TextBadgeBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Kind}" Value="{x:Static core:ClipKind.Image}">
+                                                                <Setter Property="Background" Value="{DynamicResource ImageBadgeBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Kind}" Value="{x:Static core:ClipKind.Files}">
+                                                                <Setter Property="Background" Value="{DynamicResource FileBadgeBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
                                                 <Grid>
                                                     <ui:SymbolIcon Symbol="{Binding IconSymbol}"
                                                                    FontSize="18"
@@ -621,7 +650,7 @@
                                                         <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                                                <Setter Property="Foreground" Value="{DynamicResource SystemAccentColorBrush}" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource BrandStrongBrush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -648,7 +677,7 @@
                                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
                         <ui:SymbolIcon Symbol="Clipboard24"
                                        FontSize="38"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                       Foreground="{DynamicResource BrandBrush}" />
                         <TextBlock Text="复制的内容会出现在这里"
                                    Margin="0,10,0,0"
                                    HorizontalAlignment="Center"

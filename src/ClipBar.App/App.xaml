@@ -15,7 +15,21 @@
                  so the surface can never disagree with our text-colour overrides (the dark theme
                  used to render white text on WPF-UI's light background after a system theme
                  switch). -->
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F3F3F3" />
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F3F7FC" />
+            <SolidColorBrush x:Key="BrandBrush" Color="#0A83F2" />
+            <SolidColorBrush x:Key="BrandStrongBrush" Color="#005FB9" />
+            <SolidColorBrush x:Key="LogoBackgroundBrush" Color="#005FB9" />
+            <SolidColorBrush x:Key="LogoForegroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="HistoryCardBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="HistoryCardBorderBrush" Color="#E1EAF4" />
+            <SolidColorBrush x:Key="HistoryHoverBrush" Color="#EFF6FF" />
+            <SolidColorBrush x:Key="HistorySelectedBrush" Color="#E4F1FF" />
+            <SolidColorBrush x:Key="HistorySelectedBorderBrush" Color="#83BDF3" />
+            <SolidColorBrush x:Key="HistoryFocusBrush" Color="#005FB9" />
+            <SolidColorBrush x:Key="IconBadgeBrush" Color="#E8F2FF" />
+            <SolidColorBrush x:Key="TextBadgeBrush" Color="#E8F2FF" />
+            <SolidColorBrush x:Key="ImageBadgeBrush" Color="#E3F5F1" />
+            <SolidColorBrush x:Key="FileBadgeBrush" Color="#FFF3D8" />
 
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
             <converters:ThumbnailSizeConverter x:Key="ThumbnailSize" />

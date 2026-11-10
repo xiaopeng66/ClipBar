@@ -30,58 +30,117 @@ public static class ThemeService
         => window.SetValue(DeclaredBackdropProperty, value);
 
     /// <summary>
-    /// Light-mode replacements for the Fluent brushes that are too faint to read on a bright
-    /// background: 6% black strokes and 45% black tertiary text nearly disappear. The values are
-    /// pushed into Application.Resources, which shadows the merged theme dictionary, so every
+    /// Light palette and readable Fluent replacements. These values are pushed into
+    /// Application.Resources, which shadows the merged theme dictionary, so every
     /// DynamicResource consumer (panel, tray menu, settings, dialogs) picks them up.
     /// </summary>
-    /// <remarks>
-    /// The text ramp is deliberately much darker than the Fluent defaults. Small text (11-12 px)
-    /// is rendered with ClearType, and a glyph stem only covers roughly two thirds of its pixel,
-    /// so a nominal 62% black secondary actually lands near 40% on screen — the "everything looks
-    /// washed out" the light theme used to have. Note that secondary used to be set to 36%, i.e.
-    /// *lighter* than tertiary, which inverted the whole hierarchy.
-    /// </remarks>
     private static readonly (string Key, Color Color)[] LightOverrides =
     [
-        // Strokes.
-        ("ControlStrokeColorDefaultBrush", Color.FromArgb(0x2E, 0, 0, 0)),
-        ("ControlStrokeColorSecondaryBrush", Color.FromArgb(0x3D, 0, 0, 0)),
-        ("ControlStrokeColorTertiaryBrush", Color.FromArgb(0x26, 0, 0, 0)),
-        ("SurfaceStrokeColorDefaultBrush", Color.FromArgb(0x26, 0, 0, 0)),
-        ("DividerStrokeColorDefaultBrush", Color.FromArgb(0x33, 0, 0, 0)),
-        ("ControlStrongFillColorDefaultBrush", Color.FromArgb(0x66, 0, 0, 0)),
+        // Website-aligned, cool surfaces with quiet blue-gray borders.
+        ("ApplicationBackgroundBrush", Color.FromRgb(0xF3, 0xF7, 0xFC)),
+        ("ControlFillColorDefaultBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("ControlFillColorSecondaryBrush", Color.FromRgb(0xF7, 0xFA, 0xFE)),
+        ("ControlFillColorTertiaryBrush", Color.FromRgb(0xEE, 0xF4, 0xFB)),
+        ("ControlStrokeColorDefaultBrush", Color.FromRgb(0xD2, 0xDE, 0xEC)),
+        ("ControlStrokeColorSecondaryBrush", Color.FromRgb(0xC2, 0xD2, 0xE4)),
+        ("ControlStrokeColorTertiaryBrush", Color.FromRgb(0xE5, 0xED, 0xF5)),
+        ("SurfaceStrokeColorDefaultBrush", Color.FromRgb(0xDC, 0xE6, 0xF2)),
+        ("DividerStrokeColorDefaultBrush", Color.FromRgb(0xE1, 0xE9, 0xF2)),
+        ("ControlStrongFillColorDefaultBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("SubtleFillColorSecondaryBrush", Color.FromRgb(0xEC, 0xF4, 0xFE)),
+        ("SubtleFillColorTertiaryBrush", Color.FromRgb(0xE0, 0xEE, 0xFF)),
 
-        // Text ramp: primary 90%, secondary 82%, tertiary 75% black. ClearType renders a glyph
-        // stem at roughly 70-75% of its nominal alpha, so 75% is what actually lands near the
-        // 4.5:1 floor for the 11 px hint text.
-        ("TextFillColorPrimaryBrush", Color.FromArgb(0xE6, 0, 0, 0)),
-        ("TextFillColorSecondaryBrush", Color.FromArgb(0xD2, 0, 0, 0)),
-        ("TextFillColorTertiaryBrush", Color.FromArgb(0xC0, 0, 0, 0)),
-        ("TextPlaceholderColorBrush", Color.FromArgb(0xC0, 0, 0, 0)),
-        ("TextFillColorDisabledBrush", Color.FromArgb(0x7A, 0, 0, 0)),
+        // Deep navy carries small text; the vivid blue is reserved for accents and artwork.
+        ("TextFillColorPrimaryBrush", Color.FromRgb(0x14, 0x26, 0x3D)),
+        ("TextFillColorSecondaryBrush", Color.FromRgb(0x2D, 0x44, 0x5D)),
+        ("TextFillColorTertiaryBrush", Color.FromRgb(0x3E, 0x56, 0x70)),
+        ("TextPlaceholderColorBrush", Color.FromRgb(0x42, 0x5A, 0x74)),
+        ("TextFillColorDisabledBrush", Color.FromRgb(0x6C, 0x7E, 0x92)),
+
+        // Filled controls use the darker brand blue so white labels remain legible.
+        ("SystemAccentColorBrush", Color.FromRgb(0x0A, 0x83, 0xF2)),
+        ("AccentFillColorDefaultBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("AccentFillColorSecondaryBrush", Color.FromRgb(0x00, 0x52, 0xA2)),
+        ("AccentFillColorTertiaryBrush", Color.FromRgb(0x00, 0x48, 0x8D)),
+        ("AccentTextFillColorPrimaryBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentTextFillColorSecondaryBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentTextFillColorTertiaryBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        // WPF-UI buttons resolve their own keys, not the generic accent fill brushes.
+        ("AccentButtonBackground", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("AccentButtonBackgroundPointerOver", Color.FromRgb(0x00, 0x52, 0xA2)),
+        ("AccentButtonBackgroundPressed", Color.FromRgb(0x00, 0x48, 0x8D)),
+        ("AccentButtonForeground", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentButtonForegroundPointerOver", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentButtonForegroundPressed", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("LogoBackgroundBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("LogoForegroundBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+
+        // Semantic brushes shared by the custom history card templates.
+        ("BrandBrush", Color.FromRgb(0x0A, 0x83, 0xF2)),
+        ("BrandStrongBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("HistoryCardBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("HistoryCardBorderBrush", Color.FromRgb(0xE1, 0xEA, 0xF4)),
+        ("HistoryHoverBrush", Color.FromRgb(0xEF, 0xF6, 0xFF)),
+        ("HistorySelectedBrush", Color.FromRgb(0xE4, 0xF1, 0xFF)),
+        ("HistorySelectedBorderBrush", Color.FromRgb(0x83, 0xBD, 0xF3)),
+        ("HistoryFocusBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("IconBadgeBrush", Color.FromRgb(0xE8, 0xF2, 0xFF)),
+        ("TextBadgeBrush", Color.FromRgb(0xE8, 0xF2, 0xFF)),
+        ("ImageBadgeBrush", Color.FromRgb(0xE3, 0xF5, 0xF1)),
+        ("FileBadgeBrush", Color.FromRgb(0xFF, 0xF3, 0xD8)),
     ];
 
-    /// <summary>
-    /// Dark-mode text ramp. The Fluent defaults (77% / 55% white) are the mirror image of the
-    /// light-mode problem: on the acrylic panel the 11 px subtitles and footer hints read as grey
-    /// mush. Brightness is raised so the same three levels stay legible, again keeping the
-    /// ordering primary &gt; secondary &gt; tertiary.
-    /// </summary>
+    /// <summary>Dark counterparts to the shared semantic palette, with readable pale text.</summary>
     private static readonly (string Key, Color Color)[] DarkOverrides =
     [
-        // Strokes. WPF-UI's dark defaults render as a bright ~60% white hairline around the
-        // panel ("外面的白边"): a 1 DIP edge at that brightness reads as a white frame on a
-        // dark acrylic surface. Keep them subtle, mirroring the light-theme stroke alpha.
-        ("SurfaceStrokeColorDefaultBrush", Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)),
-        ("DividerStrokeColorDefaultBrush", Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
-        ("ControlStrokeColorDefaultBrush", Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)),
+        ("ApplicationBackgroundBrush", Color.FromRgb(0x10, 0x24, 0x3D)),
+        ("ControlFillColorDefaultBrush", Color.FromRgb(0x1B, 0x33, 0x4E)),
+        ("ControlFillColorSecondaryBrush", Color.FromRgb(0x21, 0x3D, 0x5B)),
+        ("ControlFillColorTertiaryBrush", Color.FromRgb(0x28, 0x47, 0x65)),
+        ("ControlStrokeColorDefaultBrush", Color.FromRgb(0x38, 0x52, 0x6D)),
+        ("ControlStrokeColorSecondaryBrush", Color.FromRgb(0x4B, 0x64, 0x7E)),
+        ("ControlStrokeColorTertiaryBrush", Color.FromRgb(0x2B, 0x42, 0x5B)),
+        ("SurfaceStrokeColorDefaultBrush", Color.FromRgb(0x30, 0x4B, 0x67)),
+        ("DividerStrokeColorDefaultBrush", Color.FromRgb(0x29, 0x42, 0x5C)),
+        ("ControlStrongFillColorDefaultBrush", Color.FromRgb(0x7D, 0xBB, 0xFF)),
+        ("SubtleFillColorSecondaryBrush", Color.FromRgb(0x1C, 0x3B, 0x5A)),
+        ("SubtleFillColorTertiaryBrush", Color.FromRgb(0x24, 0x48, 0x6A)),
 
-        ("TextFillColorPrimaryBrush", Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
-        ("TextFillColorSecondaryBrush", Color.FromArgb(0xEB, 0xFF, 0xFF, 0xFF)),
-        ("TextFillColorTertiaryBrush", Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF)),
-        ("TextPlaceholderColorBrush", Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF)),
-        ("TextFillColorDisabledBrush", Color.FromArgb(0x8A, 0xFF, 0xFF, 0xFF)),
+        ("TextFillColorPrimaryBrush", Color.FromRgb(0xF5, 0xF8, 0xFC)),
+        ("TextFillColorSecondaryBrush", Color.FromRgb(0xDC, 0xE8, 0xF6)),
+        ("TextFillColorTertiaryBrush", Color.FromRgb(0xC1, 0xD2, 0xE5)),
+        ("TextPlaceholderColorBrush", Color.FromRgb(0xBD, 0xCE, 0xE2)),
+        ("TextFillColorDisabledBrush", Color.FromRgb(0x89, 0x9B, 0xB0)),
+
+        ("SystemAccentColorBrush", Color.FromRgb(0x70, 0xB9, 0xFF)),
+        ("AccentFillColorDefaultBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("AccentFillColorSecondaryBrush", Color.FromRgb(0x00, 0x52, 0xA2)),
+        ("AccentFillColorTertiaryBrush", Color.FromRgb(0x00, 0x48, 0x8D)),
+        ("AccentTextFillColorPrimaryBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentTextFillColorSecondaryBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentTextFillColorTertiaryBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        // WPF-UI buttons resolve their own keys, not the generic accent fill brushes.
+        ("AccentButtonBackground", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("AccentButtonBackgroundPointerOver", Color.FromRgb(0x00, 0x52, 0xA2)),
+        ("AccentButtonBackgroundPressed", Color.FromRgb(0x00, 0x48, 0x8D)),
+        ("AccentButtonForeground", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentButtonForegroundPointerOver", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("AccentButtonForegroundPressed", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("LogoBackgroundBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
+        ("LogoForegroundBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+
+        ("BrandBrush", Color.FromRgb(0x70, 0xB9, 0xFF)),
+        ("BrandStrongBrush", Color.FromRgb(0x80, 0xBD, 0xFF)),
+        ("HistoryCardBrush", Color.FromRgb(0x1B, 0x33, 0x4E)),
+        ("HistoryCardBorderBrush", Color.FromRgb(0x2B, 0x45, 0x60)),
+        ("HistoryHoverBrush", Color.FromRgb(0x20, 0x3F, 0x60)),
+        ("HistorySelectedBrush", Color.FromRgb(0x1F, 0x45, 0x69)),
+        ("HistorySelectedBorderBrush", Color.FromRgb(0x66, 0xAD, 0xF2)),
+        ("HistoryFocusBrush", Color.FromRgb(0x80, 0xBD, 0xFF)),
+        ("IconBadgeBrush", Color.FromRgb(0x1E, 0x3D, 0x5B)),
+        ("TextBadgeBrush", Color.FromRgb(0x1E, 0x3D, 0x5B)),
+        ("ImageBadgeBrush", Color.FromRgb(0x1D, 0x41, 0x45)),
+        ("FileBadgeBrush", Color.FromRgb(0x4B, 0x40, 0x29)),
     ];
 
     /// <summary>
@@ -239,16 +298,18 @@ public static class ThemeService
 
     private static void ApplyContrastOverrides(ApplicationTheme theme)
     {
-        var resources = Application.Current?.Resources;
-        if (resources is null)
+        if (Application.Current?.Resources is { } resources)
         {
-            return;
+            ApplyPalette(resources, theme);
         }
+    }
 
+    internal static void ApplyPalette(ResourceDictionary resources, ApplicationTheme theme)
+    {
         if (!Platform.ThemeSelection.ShouldApplyCustomPalette(theme))
         {
-            // High Contrast owns the palette. Drop both custom ramps so they cannot shadow the
-            // system dictionary, and paint the surface fully opaque over the backdrop.
+            // High Contrast owns the palette. Drop every custom palette entry so it cannot
+            // shadow the system dictionary, then use system brushes for custom history states.
             foreach (var (key, _) in LightOverrides)
             {
                 resources.Remove(key);
@@ -260,9 +321,20 @@ public static class ThemeService
             }
 
             resources["SurfaceLayerOpacity"] = 1.0d;
-            var systemBadge = new SolidColorBrush(SystemColors.ControlColor);
-            systemBadge.Freeze();
-            resources["IconBadgeBrush"] = systemBadge;
+            resources["BrandBrush"] = SystemColors.HighlightBrush;
+            resources["BrandStrongBrush"] = SystemColors.HighlightBrush;
+            resources["LogoBackgroundBrush"] = SystemColors.HighlightBrush;
+            resources["LogoForegroundBrush"] = SystemColors.HighlightTextBrush;
+            resources["HistoryCardBrush"] = SystemColors.WindowBrush;
+            resources["HistoryCardBorderBrush"] = SystemColors.WindowBrush;
+            resources["HistoryHoverBrush"] = SystemColors.ControlBrush;
+            resources["HistorySelectedBrush"] = SystemColors.WindowBrush;
+            resources["HistorySelectedBorderBrush"] = SystemColors.HighlightBrush;
+            resources["HistoryFocusBrush"] = SystemColors.HighlightBrush;
+            resources["IconBadgeBrush"] = SystemColors.ControlBrush;
+            resources["TextBadgeBrush"] = SystemColors.ControlBrush;
+            resources["ImageBadgeBrush"] = SystemColors.ControlBrush;
+            resources["FileBadgeBrush"] = SystemColors.ControlBrush;
             return;
         }
 
@@ -272,18 +344,7 @@ public static class ThemeService
         // A higher layer opacity in light mode lets the theme surface dominate the blend.
         resources["SurfaceLayerOpacity"] = theme == ApplicationTheme.Light ? 0.96d : 0.88d;
 
-        // The icon tile behind each history row's glyph. The stock ControlFillColorSecondary
-        // is a near-white wash on the light theme, so the badge (and the glyph on it) almost
-        // disappeared; both themes get an explicit tile that contrasts with the surface.
-        var badge = theme == ApplicationTheme.Light
-            ? Color.FromRgb(0xE6, 0xE6, 0xE6)
-            : Color.FromRgb(0x2E, 0x2E, 0x2E);
-        var badgeBrush = new SolidColorBrush(badge);
-        badgeBrush.Freeze();
-        resources["IconBadgeBrush"] = badgeBrush;
-
-        // Whichever ramp is not active has to be dropped again, otherwise the previous theme's
-        // brushes would keep shadowing the newly applied theme dictionary.
+        // Drop the previous theme palette so none of its brushes shadow the newly applied one.
         var stale = theme == ApplicationTheme.Light ? DarkOverrides : LightOverrides;
         foreach (var (key, _) in stale)
         {
@@ -313,8 +374,8 @@ public static class ThemeService
         var color = _applied == ApplicationTheme.HighContrast
             ? SystemColors.WindowColor
             : _applied == ApplicationTheme.Dark
-                ? Color.FromRgb(0x20, 0x20, 0x20)
-                : Color.FromRgb(0xF3, 0xF3, 0xF3);
+                ? Color.FromRgb(0x10, 0x24, 0x3D)
+                : Color.FromRgb(0xF3, 0xF7, 0xFC);
 
         if (_applied != ApplicationTheme.HighContrast
             && app.TryFindResource("ApplicationBackgroundBrush") is SolidColorBrush fluent)
