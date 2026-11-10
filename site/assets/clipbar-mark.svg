@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">ClipBar</title>
+  <defs>
+    <linearGradient id="tile" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0A83F2"/>
+      <stop offset="1" stop-color="#005FB9"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="52" fill="url(#tile)"/>
+  <rect x="104" y="37" width="49" height="33" rx="13" fill="#fff"/>
+  <rect x="70" y="52" width="117" height="160" rx="17" fill="#fff"/>
+  <rect x="116" y="50" width="25" height="15" rx="7" fill="#005FB8"/>
+  <rect x="88" y="80" width="81" height="111" rx="11" fill="#E8F2FF"/>
+  <rect x="102" y="104" width="57" height="8" rx="4" fill="#78A5DC"/>
+  <rect x="102" y="126" width="57" height="8" rx="4" fill="#78A5DC"/>
+  <rect x="102" y="148" width="39" height="8" rx="4" fill="#78A5DC"/>
+</svg>
