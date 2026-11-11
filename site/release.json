@@ -20,8 +20,14 @@
     "checksums": {
       "name": "SHA256SUMS.txt",
       "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/SHA256SUMS.txt",
-      "bytes": 177,
-      "sha256": "f3ca9e573ccbdad8983d95e8b1b8d4b908ea9180679ba20c4acf3e98bcd751bc"
+      "bytes": 270,
+      "sha256": "b11fc7dabfe2ba87dc9d59ddc9d3e8030d05f8bccfd007af1dcc9e7dd55707ed"
+    },
+    "installer": {
+      "name": "ClipBar-Setup-1.0.0.exe",
+      "bytes": 68660762,
+      "sha256": "58fe9f6e1eef47e7f5b0a24f01bb13410ffe8f47a1d31e7339e325a9d113d90e",
+      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-Setup-1.0.0.exe"
     }
   }
 }

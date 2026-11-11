@@ -145,6 +145,9 @@ details[open] > summary::after { content: "−"; }
 .advanced-download p { margin: 3px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .advanced-download a, .checksum-link { font-size: 12px; color: var(--blue-deep); display: inline-flex; align-items: center; gap: 4px; min-height: 36px; }
 .checksum-link { margin-top: 5px; }
+.installer-download { margin: 12px 0 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
+.installer-download a { color: var(--blue-deep); display: inline-flex; align-items: center; gap: 4px; min-height: 36px; font-weight: 600; }
+.installer-download span { color: var(--muted); }
 .mobile-platform-note { font-size: 11px; line-height: 1.7; color: #5f738a; margin: 10px 0 0; }
 .faq { padding-bottom: 100px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 70px; }
 .faq h2 { font-size: 28px; line-height: 1.5; }

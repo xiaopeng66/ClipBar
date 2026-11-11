@@ -89,13 +89,14 @@
 
 ## 安装
 
-从 [Releases](https://github.com/xiaopeng66/ClipBar/releases/latest) 下载，解压即用，无需安装：
+从 [Releases](https://github.com/xiaopeng66/ClipBar/releases/latest) 下载。安装版适合长期使用，便携版解压即用：
 
 | 文件 | 说明 |
 | --- | --- |
 | `ClipBar-win-x64.exe` | 标准版，自包含运行时，双击即用，无需预装任何东西 |
+| `ClipBar-Setup-1.0.0.exe` | 安装版：创建开始菜单快捷方式、写入卸载项，按用户安装、不需要管理员；卸载时保留历史与设置 |
 | `ClipBar-lite-win-x64.exe` | 轻量版，体积小得多，需要 [.NET 10 桌面运行时](https://dotnet.microsoft.com/download/dotnet/10.0) |
-| `SHA256SUMS.txt` | 上面两个文件的 SHA-256 校验值 |
+| `SHA256SUMS.txt` | 上面全部文件的 SHA-256 校验值 |
 
 系统要求：Windows 10 / 11（x64）。
 

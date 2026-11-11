@@ -161,12 +161,13 @@
   const applyRelease = (release, freshlyChecked) => {
     if (!release || !/^\d+\.\d+\.\d+$/.test(release.version)) return false;
     const assets = release.assets;
-    if (!assets || !['standard', 'lite', 'checksums'].every((kind) => trustedDownload(assets[kind]?.url))) return false;
-    if (![assets.standard.bytes, assets.lite.bytes].every((size) => Number.isSafeInteger(size) && size > 0)) return false;
+    if (!assets || !['standard', 'lite', 'installer', 'checksums'].every((kind) => trustedDownload(assets[kind]?.url))) return false;
+    if (![assets.standard.bytes, assets.lite.bytes, assets.installer.bytes].every((size) => Number.isSafeInteger(size) && size > 0)) return false;
     document.querySelectorAll('[data-download]').forEach((link) => { link.href = assets[link.dataset.download].url; });
     document.querySelectorAll('[data-version]').forEach((label) => { label.textContent = release.version; });
     document.querySelector('#release-detail').textContent = `${freshlyChecked ? '最新版' : '已核验版本'} ${release.version} · ${megabytes(assets.standard.bytes)} · 无需预装 .NET`;
     document.querySelector('#lite-size').textContent = `（${megabytes(assets.lite.bytes)}）`;
+    document.querySelector('#installer-size').textContent = `（${megabytes(assets.installer.bytes)}）`;
     document.querySelector('[data-fallback]').href = `${repository}/releases/latest`;
     return true;
   };
@@ -184,7 +185,7 @@
     try {
       const latest = await fetchJson('https://api.github.com/repos/xiaopeng66/ClipBar/releases/latest');
       if (latest.draft || latest.prerelease || !Array.isArray(latest.assets)) return;
-      const names = { standard: 'ClipBar-win-x64.exe', lite: 'ClipBar-lite-win-x64.exe', checksums: 'SHA256SUMS.txt' };
+      const names = { standard: 'ClipBar-win-x64.exe', lite: 'ClipBar-lite-win-x64.exe', installer: 'ClipBar-Setup-1.0.0.exe', checksums: 'SHA256SUMS.txt' };
       const assets = {};
       for (const [kind, name] of Object.entries(names)) {
         const asset = latest.assets.find((item) => item.name === name && item.state === 'uploaded');
