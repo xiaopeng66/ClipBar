@@ -1,6 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/ClipBar.App/ClipBar.App.csproj" />
-    <Project Path="src/ClipBar.Core/ClipBar.Core.csproj" />
-  </Folder>
-</Solution>

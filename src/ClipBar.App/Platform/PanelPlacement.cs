@@ -9,7 +9,7 @@ namespace ClipBar.App.Platform;
 /// Monitor work areas are physical pixels while WPF sizes windows in DIPs. DIPs are
 /// device-independent, so a 420 DIP panel is still 420 DIP on a 200% monitor — only the
 /// <em>target</em> monitor's scale converts it to the physical pixels that are centred there.
-/// Using the current monitor's scale instead (the pre-1.1.2 rule) made the panel land
+/// Using the current monitor's scale instead (the earlier rule) made the panel land
 /// off-centre whenever it moved between monitors with different DPI (F-23); keeping the
 /// arithmetic here makes that measurable without a live second monitor.
 /// </remarks>
