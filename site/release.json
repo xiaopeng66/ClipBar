@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "version": "1.0.0",
   "tag": "v1.0.0",
-  "sourceCommit": "26720293d329b3771a750371cfe02c0fae17f1a9",
-  "sourceUrl": "https://github.com/xiaopeng66/ClipBar/tree/26720293d329b3771a750371cfe02c0fae17f1a9",
+  "sourceCommit": "9bb3d197582f5a328444386fcd617356d81fe104",
+  "sourceUrl": "https://github.com/xiaopeng66/ClipBar/tree/9bb3d197582f5a328444386fcd617356d81fe104",
   "assets": {
     "standard": {
       "name": "ClipBar-win-x64.exe",
