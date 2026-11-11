@@ -132,10 +132,22 @@ app.log        运行日志（超过 1 MB 轮转）
 
 ```powershell
 cd ClipBar
-.\build.cmd "..\clipbar-build" ".."
+$workspace = Split-Path $PWD -Parent
+.\build.cmd (Join-Path $workspace 'clipbar-build') $workspace
 ```
 
-自包含版输出到 `..\clipbar-build\standard\ClipBar.exe`，轻量版输出到 `..\clipbar-build\lite\ClipBar.exe`，可直接上传的两种附件与校验文件在 `..\clipbar-build\release-assets\`。脚本不会覆盖运行中的程序或任何数据目录；也可以直接调用 `scripts/package.ps1`，用可选的 `PackageSource` 指定本地 NuGet 源做离线构建。
+自包含版输出到 `clipbar-build\standard\ClipBar.exe`，轻量版输出到 `clipbar-build\lite\ClipBar.exe`，可直接上传的附件与校验文件在 `clipbar-build\release-assets\`。脚本只接受解析后的绝对路径（不接受 `..`），也不会覆盖运行中的程序或任何数据目录；也可以直接调用 `scripts/package.ps1`，用可选的 `PackageSource` 指定本地 NuGet 源做离线构建。
+
+需要安装包时，先装 [Inno Setup 6](https://jrsoftware.org/isdl.php)，再用上一步产出的标准版生成（输出目录同样必须尚不存在）：
+
+```powershell
+$workspace = Split-Path $PWD -Parent
+$src = Join-Path $workspace 'clipbar-build\release-assets\ClipBar-win-x64.exe'
+$dst = Join-Path $workspace 'clipbar-setup'
+.\scripts\build-installer.ps1 -SourceExe $src -OutputDirectory $dst -Version 1.0.0
+```
+
+安装包按用户安装到 `%LOCALAPPDATA%\Programs\ClipBar`，不需要管理员；卸载时保留 `%LOCALAPPDATA%\ClipBar` 的历史与设置。
 
 ## 已知限制
 

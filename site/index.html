@@ -91,14 +91,14 @@
     </div></section>
 
     <section class="download-section shell section-space" id="download" aria-labelledby="download-title">
-      <div class="download-heading"><p class="platform-note"><span class="windows-mark" aria-hidden="true"></span> Windows x64</p><h2 id="download-title">让复制过的内容，<br>继续派上用场。</h2><p>下载自包含版，运行下载的 EXE。<br>从一次 <kbd>Win</kbd> + <kbd>Alt</kbd> + <kbd>V</kbd> 开始。</p></div>
+      <div class="download-heading"><p class="platform-note"><span class="windows-mark" aria-hidden="true"></span> Windows x64</p><h2 id="download-title">让复制过的内容，<br>继续派上用场。</h2><p>下载安装版，或用便携版直接运行。<br>从一次 <kbd>Win</kbd> + <kbd>Alt</kbd> + <kbd>V</kbd> 开始。</p></div>
       <div class="download-panel">
         <div class="release-title"><img src="assets/clipbar-mark.svg" width="48" height="48" alt=""><div><h3>ClipBar <span data-version>1.0.0</span></h3><p>Windows x64 · 三种版本任选</p></div><span class="release-badge">推荐安装版</span></div>
         <div class="download-options">
           <a class="download-option is-primary" data-download="installer" href="https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-Setup-1.0.0.exe">
             <span class="option-head"><strong>安装版</strong><span class="option-tag">推荐</span></span>
             <span class="option-desc">创建开始菜单快捷方式和卸载入口，按用户安装，不需要管理员。</span>
-            <span class="option-meta"><span id="installer-size">68.5 MB</span> · 卸载时保留历史与设置</span>
+            <span class="option-meta"><span id="installer-size">65.5 MB</span> · 卸载时保留历史与设置</span>
             <span class="option-action">下载安装包</span>
           </a>
           <a class="download-option" data-download="standard" href="https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-win-x64.exe">
@@ -123,7 +123,7 @@
     </section>
 
     <section class="faq shell" id="questions" aria-labelledby="faq-title"><h2 id="faq-title">开始之前，你可能想知道</h2><div class="faq-list">
-      <details><summary>自包含版和轻量版，应该选哪个？</summary><p>优先选自包含版：已包含运行所需的 .NET 组件。轻量版文件更小，但需要电脑已安装 .NET 10 Desktop Runtime（x64）。两者的主要功能相同。</p></details>
+      <details><summary>安装版、便携版和轻量版，该选哪个？</summary><p>优先选安装版：带开始菜单快捷方式和卸载入口，按用户安装、不需要管理员，卸载时保留历史与设置。想放 U 盘或不想在系统里留安装记录，选便携版，同样是自包含运行时。已经装过 .NET 10 Desktop Runtime（x64）的电脑可以选轻量版，体积最小。三者功能完全相同。</p></details>
       <details><summary>手机、Mac 或 ARM 电脑可以使用吗？</summary><p>当前提供的是 Windows x64 程序，不是手机版或 macOS 应用，也没有提供原生 ARM64 构建。这个官网支持手机浏览，但软件需在适合的 Windows 电脑上运行。</p></details>
       <details><summary>下载后怎样打开？系统为什么可能提示警告？</summary><p>运行下载的 EXE 即可。未建立签名或下载信誉的程序可能触发 Windows 安全提示；请先核对官方下载来源和 SHA-256，不要为运行软件关闭系统安全防护。</p></details>
       <details><summary>所有窗口都能自动粘贴吗？</summary><p>不同应用可能限制模拟输入。ClipBar 以普通权限运行时，不会向管理员权限窗口自动注入 Ctrl+V；可以在目标窗口手动粘贴。不要为了粘贴把日常剪贴板工具提升为管理员运行。</p></details>
