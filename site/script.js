@@ -165,9 +165,10 @@
     if (![assets.standard.bytes, assets.lite.bytes, assets.installer.bytes].every((size) => Number.isSafeInteger(size) && size > 0)) return false;
     document.querySelectorAll('[data-download]').forEach((link) => { link.href = assets[link.dataset.download].url; });
     document.querySelectorAll('[data-version]').forEach((label) => { label.textContent = release.version; });
-    document.querySelector('#release-detail').textContent = `${freshlyChecked ? '最新版' : '已核验版本'} ${release.version} · ${megabytes(assets.standard.bytes)} · 无需预装 .NET`;
-    document.querySelector('#lite-size').textContent = `（${megabytes(assets.lite.bytes)}）`;
-    document.querySelector('#installer-size').textContent = `（${megabytes(assets.installer.bytes)}）`;
+    document.querySelector('#release-detail').textContent = `${freshlyChecked ? '最新版' : '已核验版本'} ${release.version} · 安装包 ${megabytes(assets.installer.bytes)} · 无需预装 .NET`;
+    document.querySelector('#installer-size').textContent = megabytes(assets.installer.bytes);
+    document.querySelector('#standard-size').textContent = megabytes(assets.standard.bytes);
+    document.querySelector('#lite-size').textContent = megabytes(assets.lite.bytes);
     document.querySelector('[data-fallback]').href = `${repository}/releases/latest`;
     return true;
   };

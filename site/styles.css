@@ -145,6 +145,17 @@ details[open] > summary::after { content: "−"; }
 .advanced-download p { margin: 3px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .advanced-download a, .checksum-link { font-size: 12px; color: var(--blue-deep); display: inline-flex; align-items: center; gap: 4px; min-height: 36px; }
 .checksum-link { margin-top: 5px; }
+.download-options { display: grid; gap: 8px; margin: 14px 0 0; }
+.download-option { display: block; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; text-decoration: none; color: inherit; background: #fff; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.download-option:hover { border-color: #9cc3e8; box-shadow: 0 6px 18px rgba(20, 38, 61, .07); transform: translateY(-1px); }
+.download-option.is-primary { border-color: #7fb3e0; background: linear-gradient(180deg, #f6fbff, #fff); }
+.option-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.option-head strong { font-weight: 600; }
+.option-tag { font-size: 10px; font-weight: 600; color: #8a5a00; background: #fff3d8; border-radius: 999px; padding: 2px 8px; }
+.option-desc { display: block; margin-top: 4px; font-size: 12px; line-height: 1.7; color: var(--muted); }
+.option-meta { display: block; margin-top: 3px; font-size: 11px; line-height: 1.7; color: #5f738a; }
+.option-action { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--blue-deep); }
+.download-option.is-primary .option-action::after { content: "→"; }
 .installer-download { margin: 12px 0 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
 .installer-download a { color: var(--blue-deep); display: inline-flex; align-items: center; gap: 4px; min-height: 36px; font-weight: 600; }
 .installer-download span { color: var(--muted); }
