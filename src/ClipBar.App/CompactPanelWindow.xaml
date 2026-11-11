@@ -25,6 +25,58 @@
         PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.Resources>
+        <!-- The compact list used the theme's stock ScrollBar: it draws arrow buttons and its
+             thumb grows to the left on hover, so the indicator sat off-centre from the arrows
+             and from the gutter used by the main panel. A 10 DIP transparent hit area with a
+             6 DIP pill centred inside keeps the indicator where it is, themed or not. -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="MinWidth" Value="10" />
+            <Setter Property="MaxWidth" Value="10" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Background="Transparent">
+                                                    <Border x:Name="ThumbBody"
+                                                            Margin="2,0"
+                                                            CornerRadius="3"
+                                                            Background="{DynamicResource TextFillColorSecondaryBrush}"
+                                                            Opacity="0.45" />
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="ThumbBody" Property="Opacity" Value="0.75" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="True">
+                                                        <Setter TargetName="ThumbBody" Property="Opacity" Value="0.75" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand"
+                                                  Opacity="0" Focusable="False" IsTabStop="False" />
+                                </Track.IncreaseRepeatButton>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand"
+                                                  Opacity="0" Focusable="False" IsTabStop="False" />
+                                </Track.DecreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Compact row: one line of content, pastes on click. No source/time line and no
              tooltip: the list is a picker, and the extra text made each row twice as tall. -->
         <Style x:Key="CompactRow" TargetType="Button">
@@ -136,7 +188,12 @@
                          ItemContainerStyle="{StaticResource RowContainer}">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <VirtualizingStackPanel />
+                            <!-- The separator belongs to each row's top edge, so scrolling down
+                                 brings the next row's line to the viewport's first pixel: a hair
+                                 that reads as a stray divider above the list. The panel starts
+                                 1 DIP above the clip, which removes exactly that pixel while the
+                                 first row (whose own line is transparent) loses nothing. -->
+                            <VirtualizingStackPanel Margin="0,-1,0,0" />
                         </ItemsPanelTemplate>
                     </ListBox.ItemsPanel>
                     <ListBox.ItemTemplate>

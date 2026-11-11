@@ -140,21 +140,35 @@ internal static class NativeMethods
     public static bool IsKeyPhysicallyDown(short state)
         => (state & unchecked((short)0x8000)) != 0;
 
+    /// <summary>
+    /// Keys that would genuinely corrupt an injected Ctrl+V, or mean the pointer interaction is
+    /// still in progress.
+    /// </summary>
+    /// <remarks>
+    /// Only modifiers and mouse buttons qualify: a held Shift/Alt/Win turns Ctrl+V into a
+    /// different shortcut (paste special, Win+V, ...), and a mouse button still down means the
+    /// click that triggered the paste has not finished. Scanning every VK code was wrong — media
+    /// and browser keys (e.g. 0xB3 play/pause) are reported as down by some keyboards/drivers
+    /// even when untouched, which made every paste fall back to "copied only".
+    /// </remarks>
+    internal static bool IsPasteConflictKey(int virtualKey) => virtualKey switch
+    {
+        0x01 or 0x02 or 0x04 or 0x05 or 0x06 => true, // mouse left/right/middle/X1/X2
+        0x10 or 0xA0 or 0xA1 => true,                 // Shift
+        0x12 or 0xA4 or 0xA5 => true,                 // Alt
+        0x5B or 0x5C => true,                         // Win
+        _ => false,
+    };
+
     public static bool IsAnyOtherKeyDown()
     {
+        // Ctrl is deliberately absent: it is part of the shortcut being injected.
         for (var key = 1; key < 256; key++)
         {
-            if (!IsKeyPhysicallyDown(GetAsyncKeyState(key)))
+            if (IsPasteConflictKey(key) && IsKeyPhysicallyDown(GetAsyncKeyState(key)))
             {
-                continue;
+                return true;
             }
-
-            if (key is 0x11 or 0xA2 or 0xA3) // VK_CONTROL, VK_LCONTROL, VK_RCONTROL
-            {
-                continue;
-            }
-
-            return true;
         }
 
         return false;
