@@ -20,6 +20,16 @@
             <SolidColorBrush x:Key="BrandStrongBrush" Color="#005FB9" />
             <SolidColorBrush x:Key="LogoBackgroundBrush" Color="#005FB9" />
             <SolidColorBrush x:Key="LogoForegroundBrush" Color="#FFFFFF" />
+            <!-- The title-bar mark draws the brand artwork from theme-aware parts, so the
+                 high-contrast pairing (Highlight/HighlightText) keeps working: tile and the
+                 "fixed" dot read on LogoBackground, board and clip on LogoForeground, and the
+                 panel/lines have their own HC mappings in ThemeService. -->
+            <LinearGradientBrush x:Key="LogoTileBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Offset="0" Color="#2E96F7" />
+                <GradientStop Offset="1" Color="#005FB9" />
+            </LinearGradientBrush>
+            <SolidColorBrush x:Key="LogoPanelBrush" Color="#EAF3FF" />
+            <SolidColorBrush x:Key="LogoLineBrush" Color="#6FA3E8" />
             <SolidColorBrush x:Key="HistoryCardBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="HistoryCardBorderBrush" Color="#E1EAF4" />
             <SolidColorBrush x:Key="HistoryHoverBrush" Color="#EFF6FF" />

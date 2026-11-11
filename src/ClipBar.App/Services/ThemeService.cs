@@ -74,6 +74,8 @@ public static class ThemeService
         ("AccentButtonForegroundPressed", Color.FromRgb(0xFF, 0xFF, 0xFF)),
         ("LogoBackgroundBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
         ("LogoForegroundBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("LogoPanelBrush", Color.FromRgb(0xEA, 0xF3, 0xFF)),
+        ("LogoLineBrush", Color.FromRgb(0x6F, 0xA3, 0xE8)),
 
         // Semantic brushes shared by the custom history card templates.
         ("BrandBrush", Color.FromRgb(0x0A, 0x83, 0xF2)),
@@ -127,6 +129,8 @@ public static class ThemeService
         ("AccentButtonForegroundPressed", Color.FromRgb(0xFF, 0xFF, 0xFF)),
         ("LogoBackgroundBrush", Color.FromRgb(0x00, 0x5F, 0xB9)),
         ("LogoForegroundBrush", Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        ("LogoPanelBrush", Color.FromRgb(0xEA, 0xF3, 0xFF)),
+        ("LogoLineBrush", Color.FromRgb(0x6F, 0xA3, 0xE8)),
 
         ("BrandBrush", Color.FromRgb(0x70, 0xB9, 0xFF)),
         ("BrandStrongBrush", Color.FromRgb(0x80, 0xBD, 0xFF)),
@@ -302,6 +306,22 @@ public static class ThemeService
         }
     }
 
+    /// <summary>
+    /// One frozen gradient instance keeps the brand tile value-identical across every palette
+    /// application, including the high-contrast round trip the palette tests walk.
+    /// </summary>
+    private static readonly LinearGradientBrush LogoTile = CreateLogoTile();
+
+    private static LinearGradientBrush CreateLogoTile()
+    {
+        var brush = new LinearGradientBrush(
+            Color.FromRgb(0x2E, 0x96, 0xF7),
+            Color.FromRgb(0x00, 0x5F, 0xB9),
+            new Point(0, 0), new Point(0, 1));
+        brush.Freeze();
+        return brush;
+    }
+
     internal static void ApplyPalette(ResourceDictionary resources, ApplicationTheme theme)
     {
         if (!Platform.ThemeSelection.ShouldApplyCustomPalette(theme))
@@ -323,6 +343,12 @@ public static class ThemeService
             resources["BrandStrongBrush"] = SystemColors.HighlightBrush;
             resources["LogoBackgroundBrush"] = SystemColors.HighlightBrush;
             resources["LogoForegroundBrush"] = SystemColors.HighlightTextBrush;
+            // The title-bar mark keeps the Highlight/HighlightText pairing in high contrast:
+            // flat system tile, board and panel merge into the foreground colour, and the
+            // lines plus the "fixed" dot read in the background colour.
+            resources["LogoTileBrush"] = SystemColors.HighlightBrush;
+            resources["LogoPanelBrush"] = SystemColors.HighlightTextBrush;
+            resources["LogoLineBrush"] = SystemColors.HighlightBrush;
             resources["HistoryCardBrush"] = SystemColors.WindowBrush;
             resources["HistoryCardBorderBrush"] = SystemColors.WindowBrush;
             resources["HistoryHoverBrush"] = SystemColors.ControlBrush;
@@ -353,6 +379,10 @@ public static class ThemeService
         {
             resources[key] = new SolidColorBrush(color);
         }
+
+        // The brand tile is a gradient, not a palette colour entry: re-point it at the frozen
+        // artwork gradient so leaving high contrast restores it like every other logo brush.
+        resources["LogoTileBrush"] = LogoTile;
     }
 
     /// <summary>

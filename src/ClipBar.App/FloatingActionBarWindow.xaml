@@ -47,50 +47,60 @@
                         <Viewbox Width="22" Height="22">
                             <Grid Width="256" Height="256">
                                 <!-- The app mark's blue tile, exactly the source artwork's colours. -->
-                                <Rectangle RadiusX="52" RadiusY="52">
+                                <Rectangle RadiusX="56" RadiusY="56">
                                     <Rectangle.Fill>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                            <GradientStop Offset="0" Color="#0A83F2" />
+                                            <GradientStop Offset="0" Color="#2E96F7" />
                                             <GradientStop Offset="1" Color="#005FB9" />
                                         </LinearGradientBrush>
                                     </Rectangle.Fill>
                                 </Rectangle>
+                                <!-- Soft top-left highlight of the refreshed artwork. -->
+                                <Ellipse Margin="14,16,0,0"
+                                         Width="144" Height="68"
+                                         HorizontalAlignment="Left" VerticalAlignment="Top"
+                                         Fill="White" Opacity="0.12" />
                                 <!-- The clip at the top of the clipboard. -->
-                                <Rectangle Margin="104,37,0,0"
-                                           Width="49" Height="33"
-                                           RadiusX="13" RadiusY="13"
+                                <Rectangle Margin="100,32,0,0"
+                                           Width="56" Height="38"
+                                           RadiusX="15" RadiusY="15"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
                                            Fill="White" />
-                                <Rectangle Margin="70,52,0,0"
-                                           Width="117" Height="160"
-                                           RadiusX="17" RadiusY="17"
+                                <Rectangle Margin="68,50,0,0"
+                                           Width="120" Height="164"
+                                           RadiusX="20" RadiusY="20"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
                                            Fill="White" />
-                                <Rectangle Margin="116,50,0,0"
-                                           Width="25" Height="15"
-                                           RadiusX="7" RadiusY="7"
+                                <Rectangle Margin="112,30,0,0"
+                                           Width="32" Height="18"
+                                           RadiusX="9" RadiusY="9"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
-                                           Fill="#005FB8" />
-                                <Rectangle Margin="88,80,0,0"
-                                           Width="81" Height="111"
-                                           RadiusX="11" RadiusY="11"
+                                           Fill="#005FB9" />
+                                <Rectangle Margin="86,76,0,0"
+                                           Width="84" Height="120"
+                                           RadiusX="14" RadiusY="14"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
-                                           Fill="#E8F2FF" />
-                                <Rectangle Margin="102,104,0,0"
-                                           Width="57" Height="8"
-                                           RadiusX="4" RadiusY="4"
+                                           Fill="#EAF3FF" />
+                                <Rectangle Margin="100,94,0,0"
+                                           Width="56" Height="10"
+                                           RadiusX="5" RadiusY="5"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
-                                           Fill="#78A5DC" />
-                                <Rectangle Margin="102,126,0,0"
-                                           Width="57" Height="8"
-                                           RadiusX="4" RadiusY="4"
+                                           Fill="#6FA3E8" />
+                                <Rectangle Margin="100,118,0,0"
+                                           Width="56" Height="10"
+                                           RadiusX="5" RadiusY="5"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
-                                           Fill="#78A5DC" />
-                                <Rectangle Margin="102,148,0,0"
-                                           Width="39" Height="8"
-                                           RadiusX="4" RadiusY="4"
+                                           Fill="#6FA3E8" />
+                                <Rectangle Margin="100,142,0,0"
+                                           Width="38" Height="10"
+                                           RadiusX="5" RadiusY="5"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
-                                           Fill="#78A5DC" />
+                                           Fill="#6FA3E8" />
+                                <!-- The "pinned" dot that closes the third line. -->
+                                <Ellipse Margin="144,140,0,0"
+                                         Width="14" Height="14"
+                                         HorizontalAlignment="Left" VerticalAlignment="Top"
+                                         Fill="#005FB9" />
                             </Grid>
                         </Viewbox>
                     </Grid>
