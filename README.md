@@ -10,7 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/xiaopeng66/ClipBar/releases/latest"><b>下载</b></a>
+  <a href="https://clipbar.us.ci"><b>官网</b></a>
+  &nbsp;·&nbsp; <a href="https://github.com/xiaopeng66/ClipBar/releases/latest">下载</a>
   &nbsp;·&nbsp; <a href="#功能">功能</a>
   &nbsp;·&nbsp; <a href="#界面预览">界面预览</a>
   &nbsp;·&nbsp; <a href="#安装">安装</a>
