@@ -67,7 +67,6 @@
       detail.src = detailSource;
       detail.alt = sceneLabels[scene].alt;
       document.querySelector('#compact-screen').src = compact;
-      document.querySelector('#dialog-screen').src = main;
       caption.replaceChildren(document.createTextNode(sceneLabels[scene].text));
       const note = document.createElement('span');
       note.textContent = '真实界面局部 · 示例数据';
@@ -121,18 +120,6 @@
     }
   });
 
-  const dialog = document.querySelector('#screen-dialog');
-  const openPreview = document.querySelector('#preview-open');
-  openPreview.addEventListener('click', () => {
-    document.querySelector('#dialog-screen').src = screen.src;
-    dialog.showModal();
-  });
-  document.querySelector('#dialog-close').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('click', (event) => {
-    const bounds = dialog.getBoundingClientRect();
-    if (event.target === dialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) dialog.close();
-  });
-  dialog.addEventListener('close', () => openPreview.focus({ preventScroll: true }));
 
   const dock = document.querySelector('#download-dock');
   const visibility = new Map();

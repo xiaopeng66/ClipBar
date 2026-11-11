@@ -20,9 +20,7 @@
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="m15 3 6 6-4 2-3 6-3-3-7 7m3-10 6-3 2-5"/></symbol>
-    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
-    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></symbol>
-    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></symbol>
+            <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></symbol>
   </defs></svg>
 
   <header class="site-header">
@@ -54,10 +52,9 @@
       </div>
       <div class="product-stage">
         <div class="stage-topline"><span>这就是 ClipBar</span><div class="theme-switch" role="group" aria-label="软件界面主题预览"><button type="button" disabled data-theme="light" aria-pressed="true">浅色</button><button type="button" disabled data-theme="dark" aria-pressed="false">深色</button></div></div>
-        <button class="product-preview" id="preview-open" type="button" disabled aria-label="放大查看 ClipBar 真实界面">
+        <div class="product-preview">
           <picture><source id="hero-mobile-source" media="(max-width: 600px)" srcset="assets/screens/history-light-360.webp" width="720" height="1240"><img id="hero-screen" src="assets/screens/history-light-420.webp" width="840" height="1240" alt="ClipBar 浅色主面板：标题与搜索同排，下方是类型筛选、已固定和今天的历史记录" fetchpriority="high" decoding="async"></picture>
-          <span class="preview-hint"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg>放大查看</span>
-        </button>
+        </div>
         <p class="screen-caption">真实软件界面 · 内容为虚构示例</p>
       </div>
     </section>
@@ -133,6 +130,5 @@
 
   <footer class="site-footer shell"><a class="brand" href="#top"><img src="assets/clipbar-mark.svg" width="30" height="30" alt=""><span>ClipBar</span></a><p>少一点寻找，多一点顺手。</p><div><a href="https://github.com/xiaopeng66/ClipBar" target="_blank" rel="noreferrer">源码</a><a href="#privacy">隐私说明</a><a href="#top">回到顶部</a></div></footer>
   <div class="download-dock" id="download-dock" aria-label="快捷下载" hidden><div><strong>ClipBar</strong><span>Windows x64</span></div><a class="button button-primary" data-download="installer" href="https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-Setup-1.0.0.exe">下载安装版<svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a></div>
-  <dialog id="screen-dialog" aria-labelledby="dialog-title"><div class="dialog-top"><h2 id="dialog-title">ClipBar 真实界面</h2><button id="dialog-close" type="button" disabled aria-label="关闭放大界面"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div><img id="dialog-screen" src="assets/screens/history-light-420.webp" width="840" height="1240" alt="ClipBar 主面板放大预览"><p>虚构示例数据，不包含真实剪贴板记录。</p></dialog>
 </body>
 </html>
