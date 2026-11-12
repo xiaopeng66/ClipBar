@@ -13,7 +13,7 @@
   #error Pass /DSourceIcon=<path to app.ico> to ISCC.
 #endif
 #ifndef MyVersion
-  #define MyVersion "1.0.0"
+  #define MyVersion "1.1.0"
 #endif
 
 [Setup]

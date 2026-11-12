@@ -5,6 +5,8 @@
                  Title="ClipBar 设置"
                  Width="560"
                  Height="660"
+                 MinWidth="560"
+                 MinHeight="480"
                  WindowStartupLocation="CenterScreen"
                  WindowStyle="None"
                  ResizeMode="CanResize"

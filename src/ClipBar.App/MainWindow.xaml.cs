@@ -95,6 +95,10 @@ public partial class MainWindow : Window
     private readonly bool _holdOpen;
     private bool _searchCompositionActive;
     private bool _workAreaRefreshQueued;
+    private bool _nativeSizeMoveActive;
+    private bool _refreshingWorkArea;
+    private double _preferredPanelWidth;
+    private double _preferredPanelHeight;
 
     public MainWindow(
         IClipRepository repository,
@@ -140,8 +144,8 @@ public partial class MainWindow : Window
         // the tracked pointer-over state of each row is meaningless after a shift, so drop it.
         ViewModel.Items.CollectionChanged += (_, _) => ClearPointerOver();
         var initial = settings();
-        Width = initial.PanelWidth;
-        Height = initial.PanelHeight;
+        Width = _preferredPanelWidth = initial.PanelWidth;
+        Height = _preferredPanelHeight = initial.PanelHeight;
         _noteGeometry = noteGeometry;
         IsVisibleChanged += (_, _) =>
         {
@@ -216,7 +220,12 @@ public partial class MainWindow : Window
     protected override void OnLocationChanged(EventArgs e)
     {
         base.OnLocationChanged(e);
-        if (!IsVisible || _isClosed || _workAreaRefreshQueued)
+        QueueWorkAreaRefresh();
+    }
+
+    private void QueueWorkAreaRefresh()
+    {
+        if (!IsVisible || _isClosed || _workAreaRefreshQueued || _nativeSizeMoveActive || _refreshingWorkArea)
         {
             return;
         }
@@ -224,17 +233,58 @@ public partial class MainWindow : Window
         _workAreaRefreshQueued = true;
         _ = Dispatcher.BeginInvoke(new Action(() =>
         {
-            _workAreaRefreshQueued = false;
-            if (IsVisible && !_isClosed)
+            try
             {
-                // Also catches transitions between same-DPI monitors whose work areas differ.
-                RefreshWorkAreaConstraint();
+                if (IsVisible && !_isClosed)
+                {
+                    // Also catches transitions between same-DPI monitors whose work areas differ.
+                    RefreshWorkAreaConstraint();
+                }
+            }
+            finally
+            {
+                // Keep the guard set while applying geometry: our own location changes must not
+                // enqueue another refresh and feed back into the native move/size loop.
+                _workAreaRefreshQueued = false;
             }
         }), DispatcherPriority.ApplicationIdle);
     }
 
+    private IntPtr PanelWindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        switch (message)
+        {
+            case 0x0231: // WM_ENTERSIZEMOVE: Windows owns geometry until the matching exit.
+                RememberPreferredPanelSize();
+                _nativeSizeMoveActive = true;
+                break;
+            case 0x0232: // WM_EXITSIZEMOVE: refit once, after native dragging/resizing has ended.
+                _nativeSizeMoveActive = false;
+                QueueWorkAreaRefresh();
+                break;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void RememberPreferredPanelSize()
+    {
+        if (WindowState != WindowState.Normal || ActualWidth <= 0 || ActualHeight <= 0)
+        {
+            return;
+        }
+
+        (_preferredPanelWidth, _preferredPanelHeight) = PanelPlacement.PreferredSizeForSave(
+            ActualWidth, ActualHeight, _preferredPanelWidth, _preferredPanelHeight, MaxWidth, MaxHeight);
+    }
+
     private void RefreshWorkAreaConstraint()
     {
+        if (_nativeSizeMoveActive || _refreshingWorkArea)
+        {
+            return;
+        }
+
         var hwnd = new WindowInteropHelper(this).Handle;
         var monitor = hwnd == IntPtr.Zero
             ? IntPtr.Zero
@@ -248,24 +298,32 @@ public partial class MainWindow : Window
             return;
         }
 
-        // A window can be dragged to a monitor with a smaller work area after it is shown. Refit
-        // the temporary caps on every per-monitor DPI transition; saved preferred dimensions are
-        // restored when the window later reaches a larger work area.
-        var scale = NativeMethods.MonitorScale(monitor);
-        var fitted = FitPanelToWorkArea(_settings(), info.Work, scale);
-        var work = info.Work;
-        var clamped = PanelPlacement.ClampIn(
-            Left,
-            Top,
-            fitted.Width,
-            fitted.Height,
-            work.Left,
-            work.Top,
-            work.Right - work.Left,
-            work.Bottom - work.Top,
-            scale);
-        Left = clamped.Left;
-        Top = clamped.Top;
+        // Settings are saved on hide, so they can be stale after a visible user resize. Retain
+        // the live preference before changing temporary caps, including a capped axis's size.
+        RememberPreferredPanelSize();
+        _refreshingWorkArea = true;
+        try
+        {
+            var scale = NativeMethods.MonitorScale(monitor);
+            var fitted = FitPanelToWorkArea(info.Work, scale);
+            var work = info.Work;
+            var clamped = PanelPlacement.ClampIn(
+                Left,
+                Top,
+                fitted.Width,
+                fitted.Height,
+                work.Left,
+                work.Top,
+                work.Right - work.Left,
+                work.Bottom - work.Top,
+                scale);
+            Left = clamped.Left;
+            Top = clamped.Top;
+        }
+        finally
+        {
+            _refreshingWorkArea = false;
+        }
     }
 
     private readonly System.Diagnostics.Stopwatch _showStopwatch = new();
@@ -408,6 +466,8 @@ public partial class MainWindow : Window
     private void RestorePlacement(int cursorX, int cursorY)
     {
         var saved = _settings();
+        _preferredPanelWidth = saved.PanelWidth;
+        _preferredPanelHeight = saved.PanelHeight;
         var mode = AppSettings.CanonicalPanelPositionMode(saved.PanelPositionMode);
         if (mode == "Remember" && saved.HasPanelPosition)
         {
@@ -430,7 +490,7 @@ public partial class MainWindow : Window
             {
                 var savedWork = savedInfo.Work;
                 var savedScale = NativeMethods.MonitorScale(savedMonitor);
-                var fitted = FitPanelToWorkArea(saved, savedWork, savedScale);
+                var fitted = FitPanelToWorkArea(savedWork, savedScale);
                 var (restoredLeft, restoredTop) = PanelPlacement.ClampIn(
                     point.X / savedScale,
                     point.Y / savedScale,
@@ -468,7 +528,7 @@ public partial class MainWindow : Window
         // testable.
         var work = info.Work;
         var targetScale = NativeMethods.MonitorScale(monitor);
-        var (width, height) = FitPanelToWorkArea(saved, work, targetScale);
+        var (width, height) = FitPanelToWorkArea(work, targetScale);
         var (left, top) = mode == "CursorAnchor"
             ? PanelPlacement.PlaceNearCursor(
                 cursorX,
@@ -493,15 +553,14 @@ public partial class MainWindow : Window
         Top = top;
     }
 
-    private (double Width, double Height) FitPanelToWorkArea(
-        AppSettings saved, NativeMethods.Rect work, double scale)
+    private (double Width, double Height) FitPanelToWorkArea(NativeMethods.Rect work, double scale)
     {
         PanelPlacement.ConstrainToWorkArea(this, work.Right - work.Left, work.Bottom - work.Top,
             scale, _normalMinWidth, _normalMinHeight);
         // Apply after replacing the old cap, so a larger destination can restore the preference.
-        Width = saved.PanelWidth;
-        Height = saved.PanelHeight;
-        return PanelPlacement.FitSize(saved.PanelWidth, saved.PanelHeight,
+        Width = _preferredPanelWidth;
+        Height = _preferredPanelHeight;
+        return PanelPlacement.FitSize(_preferredPanelWidth, _preferredPanelHeight,
             work.Right - work.Left, work.Bottom - work.Top, scale);
     }
 
@@ -515,12 +574,10 @@ public partial class MainWindow : Window
 
         // A work-area cap can resize the HWND (and WPF's Width/Height) without a user resize.
         // Keep the saved preference on each capped axis, but remember genuine smaller resizes.
-        var saved = _settings();
-        var preferred = PanelPlacement.PreferredSizeForSave(
-            ActualWidth, ActualHeight, saved.PanelWidth, saved.PanelHeight, MaxWidth, MaxHeight);
+        RememberPreferredPanelSize();
         // Position remains physical pixels; preferred size remains DPI-independent DIPs.
         var scale = DpiScale > 0 ? DpiScale : 1.0;
-        _noteGeometry?.Invoke(Left * scale, Top * scale, preferred.Width, preferred.Height);
+        _noteGeometry?.Invoke(Left * scale, Top * scale, _preferredPanelWidth, _preferredPanelHeight);
     }
 
     /// <summary>
@@ -1006,6 +1063,7 @@ public partial class MainWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
+        HwndSource.FromHwnd(hwnd)?.AddHook(PanelWindowProc);
         var style = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64();
         NativeMethods.SetWindowLongPtr(
             hwnd,

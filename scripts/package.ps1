@@ -8,7 +8,7 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
     [Parameter(Mandatory = $true)][string]$WorkspaceRoot,
     [string]$PackageSource,
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.0.0'
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.1.0'
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
