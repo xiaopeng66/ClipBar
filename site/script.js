@@ -173,14 +173,16 @@
     try {
       const latest = await fetchJson('https://api.github.com/repos/xiaopeng66/ClipBar/releases/latest');
       if (latest.draft || latest.prerelease || !Array.isArray(latest.assets)) return;
-      const names = { standard: 'ClipBar-win-x64.exe', lite: 'ClipBar-lite-win-x64.exe', installer: 'ClipBar-Setup-1.0.0.exe', checksums: 'SHA256SUMS.txt' };
+      const version = String(latest.tag_name).replace(/^v/, '');
+      if (!/^\d+\.\d+\.\d+$/.test(version)) return;
+      const names = { standard: 'ClipBar-win-x64.exe', lite: 'ClipBar-lite-win-x64.exe', installer: `ClipBar-Setup-${version}.exe`, checksums: 'SHA256SUMS.txt' };
       const assets = {};
       for (const [kind, name] of Object.entries(names)) {
         const asset = latest.assets.find((item) => item.name === name && item.state === 'uploaded');
         if (!asset) return;
         assets[kind] = { url: asset.browser_download_url, bytes: asset.size };
       }
-      applyRelease({ version: String(latest.tag_name).replace(/^v/, ''), assets }, true);
+      applyRelease({ version, assets }, true);
     } catch { /* API failure keeps the verified, versioned download and honest version label. */ }
   };
   document.querySelectorAll('button[disabled]').forEach((button) => { button.disabled = false; });

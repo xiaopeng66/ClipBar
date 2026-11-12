@@ -1,33 +1,33 @@
 {
   "schemaVersion": 1,
-  "version": "1.0.0",
-  "tag": "v1.0.0",
-  "sourceCommit": "c6010842b7e79aa1339fd649e32e87ee67c0d250",
-  "sourceUrl": "https://github.com/xiaopeng66/ClipBar/tree/c6010842b7e79aa1339fd649e32e87ee67c0d250",
+  "version": "1.1.0",
+  "tag": "v1.1.0",
+  "sourceCommit": "d2727cb6ebe1aefb1932823567a6a47c61214ac9",
+  "sourceUrl": "https://github.com/xiaopeng66/ClipBar/tree/d2727cb6ebe1aefb1932823567a6a47c61214ac9",
   "assets": {
     "standard": {
       "name": "ClipBar-win-x64.exe",
-      "bytes": 73877826,
-      "sha256": "a0b83f7166a2bf4e168964834b9d9735aa1446f28963d52e66bcd5c4031795de",
-      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-win-x64.exe"
+      "bytes": 73878039,
+      "sha256": "ce655ff11ebd396761e281b8f0b4af750a4b0f8a143307a5e15ce80e276d55b3",
+      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.1.0/ClipBar-win-x64.exe"
     },
     "lite": {
       "name": "ClipBar-lite-win-x64.exe",
-      "bytes": 9738966,
-      "sha256": "6d15147b09f1ac05284eae100be357c8468025f0b055171af5158ac1afcbe03e",
-      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-lite-win-x64.exe"
+      "bytes": 9743062,
+      "sha256": "a60bb87caa3528a1b28d5fc41d4834d861fcaa753c4c5b7738bd9ba8bb0279fb",
+      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.1.0/ClipBar-lite-win-x64.exe"
     },
     "checksums": {
       "name": "SHA256SUMS.txt",
-      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/SHA256SUMS.txt",
-      "bytes": 270,
-      "sha256": "b11fc7dabfe2ba87dc9d59ddc9d3e8030d05f8bccfd007af1dcc9e7dd55707ed"
+      "bytes": 267,
+      "sha256": "75b3e512c2e9a789aaefbeab6bcb43afae9ca17e367e4b37a9bedfb9f3eb0e92",
+      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.1.0/SHA256SUMS.txt"
     },
     "installer": {
-      "name": "ClipBar-Setup-1.0.0.exe",
-      "bytes": 68660762,
-      "sha256": "58fe9f6e1eef47e7f5b0a24f01bb13410ffe8f47a1d31e7339e325a9d113d90e",
-      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.0.0/ClipBar-Setup-1.0.0.exe"
+      "name": "ClipBar-Setup-1.1.0.exe",
+      "bytes": 68660272,
+      "sha256": "714d6e3712c3c47381ef5eb94e2ed3b16ababffd3277b9bba9c072b5115bef74",
+      "url": "https://github.com/xiaopeng66/ClipBar/releases/download/v1.1.0/ClipBar-Setup-1.1.0.exe"
     }
   }
 }
