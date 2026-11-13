@@ -20,10 +20,10 @@
          startup while the payload is unpacked to the temp folder. -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.1.0</FileVersion>
+    <AssemblyVersion>1.1.1.0</AssemblyVersion>
     <Product>ClipBar</Product>
     <Description>Windows 11 style clipboard history</Description>
   </PropertyGroup>

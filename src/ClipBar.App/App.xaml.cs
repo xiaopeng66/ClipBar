@@ -6,6 +6,7 @@ using ClipBar.App.Platform;
 using ClipBar.App.Services;
 using ClipBar.Core.Clipboard;
 using ClipBar.Core.Models;
+using ClipBar.Core.Security;
 using ClipBar.Core.Settings;
 
 namespace ClipBar.App;
@@ -40,6 +41,9 @@ public partial class App : Application
     private PasteService _pasteService = null!;
     private TrayService _tray = null!;
     private StartupService _startup = null!;
+    private readonly UpdateService _updates = new();
+    private Task<UpdateCheckResult>? _updateCheckTask;
+    private bool _announcedUpdate;
     private MainWindow? _mainWindow;
     private SettingsWindow? _settingsWindow;
 
@@ -145,6 +149,7 @@ public partial class App : Application
             _tray = new TrayService(
                 () => ShowPanel("tray"),
                 ShowSettings,
+                () => _ = CheckForUpdatesAsync(manual: true),
                 ClearAllHistory,
                 ExitApp,
                 () => _monitor.IsPaused,
@@ -207,6 +212,15 @@ public partial class App : Application
 
             AppLog.Write("ClipBar started");
 
+            if (_settings.AutoCheckUpdates)
+            {
+                // Never delay startup on the network; idle priority also keeps the first panel
+                // or compact-list frame ahead of the check.
+                _ = Dispatcher.BeginInvoke(
+                    new Action(() => _ = CheckForUpdatesAsync(manual: false)),
+                    DispatcherPriority.ApplicationIdle);
+            }
+
             if (compactOnStart)
             {
                 _ = Dispatcher.BeginInvoke(
@@ -246,6 +260,119 @@ public partial class App : Application
             AppLog.Error("Save settings", ex);
             _tray?.ShowBalloon("设置未能保存", "无法写入设置文件：" + ex.Message);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Runs one update check, sharing the in-flight request between the startup check and the
+    /// tray command. Manual checks always report the outcome; the automatic check only speaks up
+    /// when a newer release exists.
+    /// </summary>
+    private async Task<UpdateCheckResult> CheckForUpdatesAsync(bool manual)
+    {
+        var task = _updateCheckTask;
+        if (task is null)
+        {
+            task = _updates.CheckAsync();
+            _updateCheckTask = task;
+        }
+
+        UpdateCheckResult result;
+        try
+        {
+            result = await task;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Check updates", ex);
+            result = new UpdateCheckResult(UpdateCheckStatus.Failed, "未知", Error: ex.Message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_updateCheckTask, task))
+            {
+                _updateCheckTask = null;
+            }
+        }
+
+        AppLog.Write(
+            $"Update check: {result.Status} current={result.CurrentVersion} latest={result.LatestVersion ?? "-"} error={result.Error ?? "-"}");
+
+        switch (result.Status)
+        {
+            case UpdateCheckStatus.UpToDate when manual:
+                FluentMessageWindow.Notify(
+                    _mainWindow,
+                    $"当前已是最新版本 {result.CurrentVersion}。",
+                    Wpf.Ui.Controls.SymbolRegular.Checkmark24,
+                    "检查更新");
+                break;
+
+            case UpdateCheckStatus.Failed when manual:
+                FluentMessageWindow.Notify(
+                    _mainWindow,
+                    "检查更新失败：" + (result.Error ?? "未知错误") +
+                    "\n可以稍后重试，或直接打开 GitHub Releases 手动下载。",
+                    Wpf.Ui.Controls.SymbolRegular.Warning24,
+                    "检查更新");
+                break;
+
+            case UpdateCheckStatus.UpdateAvailable:
+                var message = $"发现新版本 {result.LatestVersion}（当前 {result.CurrentVersion}）。";
+                if (manual)
+                {
+                    _announcedUpdate = true;
+                    if (FluentMessageWindow.Confirm(
+                            _mainWindow,
+                            message + "\n是否打开下载页面？",
+                            "打开下载页",
+                            "稍后"))
+                    {
+                        OpenUpdatePage(result);
+                    }
+                }
+                else if (!_announcedUpdate)
+                {
+                    _announcedUpdate = true;
+                    FluentMessageWindow.Toast(
+                        message,
+                        Wpf.Ui.Controls.SymbolRegular.Info24,
+                        "有可用更新",
+                        TimeSpan.FromSeconds(12),
+                        "查看更新",
+                        () => OpenUpdatePage(result));
+                }
+                break;
+        }
+
+        return result;
+    }
+
+    private void OpenUpdatePage(UpdateCheckResult result)
+    {
+        var url = SafeUrl.Normalize(result.DownloadUrl) ?? SafeUrl.Normalize(result.ReleaseUrl);
+        if (url is null)
+        {
+            FluentMessageWindow.Notify(
+                _mainWindow,
+                "没有可用的下载地址，请打开 GitHub Releases 手动下载。",
+                Wpf.Ui.Controls.SymbolRegular.Warning24,
+                "检查更新");
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Open update page", ex);
+            FluentMessageWindow.Notify(
+                _mainWindow,
+                "无法打开下载页面：" + ex.Message,
+                Wpf.Ui.Controls.SymbolRegular.Warning24,
+                "检查更新");
         }
     }
 

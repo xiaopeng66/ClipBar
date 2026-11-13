@@ -93,7 +93,7 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `ClipBar-Setup-1.1.0.exe` | **推荐**。安装版：创建开始菜单快捷方式、写入卸载项，按用户安装、不需要管理员；卸载时保留历史与设置 |
+| `ClipBar-Setup-1.1.1.exe` | **推荐**。安装版：创建开始菜单快捷方式、写入卸载项，按用户安装、不需要管理员；卸载时保留历史与设置 |
 | `ClipBar-win-x64.exe` | 便携版：单个自包含 EXE，双击即用，无需预装任何东西，也不留安装记录 |
 | `ClipBar-lite-win-x64.exe` | 轻量版，体积小得多，需要 [.NET 10 桌面运行时](https://dotnet.microsoft.com/download/dotnet/10.0) |
 | `SHA256SUMS.txt` | 上面全部文件的 SHA-256 校验值 |
@@ -144,7 +144,7 @@ $workspace = Split-Path $PWD -Parent
 $workspace = Split-Path $PWD -Parent
 $src = Join-Path $workspace 'clipbar-build\release-assets\ClipBar-win-x64.exe'
 $dst = Join-Path $workspace 'clipbar-setup'
-.\scripts\build-installer.ps1 -SourceExe $src -OutputDirectory $dst -Version 1.1.0
+.\scripts\build-installer.ps1 -SourceExe $src -OutputDirectory $dst -Version 1.1.1
 ```
 
 安装包按用户安装到 `%LOCALAPPDATA%\Programs\ClipBar`，不需要管理员；卸载时保留 `%LOCALAPPDATA%\ClipBar` 的历史与设置。

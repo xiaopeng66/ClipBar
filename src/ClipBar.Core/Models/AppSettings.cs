@@ -78,6 +78,9 @@ public sealed class AppSettings
 
     public bool StartWithWindows { get; set; }
 
+    /// <summary>Check the public release feed once at startup; manual checks stay available.</summary>
+    public bool AutoCheckUpdates { get; set; } = true;
+
     public bool CaptureImages { get; set; } = true;
 
     public bool CaptureFiles { get; set; } = true;
@@ -116,6 +119,7 @@ public sealed class AppSettings
         FloatingAutoHideMs = FloatingAutoHideMs,
         InvokeOnDrag = InvokeOnDrag,
         StartWithWindows = StartWithWindows,
+        AutoCheckUpdates = AutoCheckUpdates,
         CaptureImages = CaptureImages,
         CaptureFiles = CaptureFiles,
         CaptureHtml = CaptureHtml,
@@ -209,6 +213,7 @@ public sealed class AppSettings
             && left.PanelWidth == right.PanelWidth
             && left.PanelHeight == right.PanelHeight
             && left.StartWithWindows == right.StartWithWindows
+            && left.AutoCheckUpdates == right.AutoCheckUpdates
             && left.CaptureImages == right.CaptureImages
             && left.CaptureFiles == right.CaptureFiles
             && left.CaptureHtml == right.CaptureHtml

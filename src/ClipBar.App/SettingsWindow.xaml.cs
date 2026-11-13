@@ -106,6 +106,7 @@ public partial class SettingsWindow : Window
         HoldDurationBox.Text = source.HoldDurationMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeepPanelOpenCheck.IsChecked = source.KeepPanelOpenAfterPaste;
         StartWithWindowsCheck.IsChecked = source.StartWithWindows;
+        AutoCheckUpdatesCheck.IsChecked = source.AutoCheckUpdates;
         CaptureImagesCheck.IsChecked = source.CaptureImages;
         CaptureFilesCheck.IsChecked = source.CaptureFiles;
         CaptureHtmlCheck.IsChecked = source.CaptureHtml;
@@ -138,6 +139,8 @@ public partial class SettingsWindow : Window
         KeepPanelOpenCheck.Unchecked += OnFormEdited;
         StartWithWindowsCheck.Checked += OnFormEdited;
         StartWithWindowsCheck.Unchecked += OnFormEdited;
+        AutoCheckUpdatesCheck.Checked += OnFormEdited;
+        AutoCheckUpdatesCheck.Unchecked += OnFormEdited;
         CaptureImagesCheck.Checked += OnFormEdited;
         CaptureImagesCheck.Unchecked += OnFormEdited;
         CaptureFilesCheck.Checked += OnFormEdited;
@@ -318,6 +321,7 @@ public partial class SettingsWindow : Window
         candidate.PasteOnClick = PasteOnClickCheck.IsChecked == true;
         candidate.KeepPanelOpenAfterPaste = KeepPanelOpenCheck.IsChecked == true;
         candidate.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        candidate.AutoCheckUpdates = AutoCheckUpdatesCheck.IsChecked == true;
         candidate.CaptureImages = CaptureImagesCheck.IsChecked == true;
         candidate.CaptureFiles = CaptureFilesCheck.IsChecked == true;
         candidate.CaptureHtml = CaptureHtmlCheck.IsChecked == true;

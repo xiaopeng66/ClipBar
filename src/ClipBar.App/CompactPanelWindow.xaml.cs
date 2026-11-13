@@ -320,8 +320,13 @@ public partial class CompactPanelWindow : Window
         }
         var targetScale = scale > 0 && double.IsFinite(scale) ? scale : 1;
         var rowPixels = Math.Max(1, Math.Floor(RowHeight * targetScale));
+        // One device pixel of slack. A row draws its hairline on its top edge, so sizing the
+        // viewport to an exact row multiple can leave that first pixel of the next row inside
+        // the viewport when DIPs map to fractional pixels (35 DIP -> 43.75 px at 125%). The
+        // leaked pixel reads as a stray divider under the last full row.
+        var viewportPixels = Math.Max(rowPixels, _visibleRows * rowPixels - 1);
         // Always derive from the baseline, never from a previously rounded/capped viewport.
-        RowList.Height = _visibleRows * rowPixels / targetScale;
+        RowList.Height = viewportPixels / targetScale;
         return _preferredHeight - _visibleRows * RowHeight + RowList.Height;
     }
 

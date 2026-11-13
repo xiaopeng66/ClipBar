@@ -1,12 +1,12 @@
 # Builds the ClipBar installer from an already-published single-file exe.
 # Usage:
-#   powershell -File scripts\build-installer.ps1 -SourceExe <ClipBar.exe> -OutputDirectory <new-dir> [-Version 1.1.0]
+#   powershell -File scripts\build-installer.ps1 -SourceExe <ClipBar.exe> -OutputDirectory <new-dir> [-Version 1.1.1]
 # The exe must be the standard self-contained build: the installer carries one binary, not the lite one.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$SourceExe,
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.1.0',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.1.1',
     [string]$IsccPath
 )
 Set-StrictMode -Version Latest

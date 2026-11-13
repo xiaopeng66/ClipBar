@@ -12,6 +12,7 @@ public sealed class TrayService : IDisposable
     private readonly TaskbarIcon _tray;
     private readonly Action _open;
     private readonly Action _settings;
+    private readonly Action _checkUpdates;
     private readonly Action _clear;
     private readonly Action _exit;
     private readonly Func<bool> _isCapturePaused;
@@ -22,6 +23,7 @@ public sealed class TrayService : IDisposable
     public TrayService(
         Action open,
         Action settings,
+        Action checkUpdates,
         Action clear,
         Action exit,
         Func<bool> isCapturePaused,
@@ -29,6 +31,7 @@ public sealed class TrayService : IDisposable
     {
         _open = open;
         _settings = settings;
+        _checkUpdates = checkUpdates;
         _clear = clear;
         _exit = exit;
         _isCapturePaused = isCapturePaused;
@@ -55,6 +58,7 @@ public sealed class TrayService : IDisposable
         TrayMenuEntry.Separator(),
         TrayMenuEntry.Item(_isCapturePaused() ? "恢复捕获" : "暂停捕获", _toggleCapture),
         TrayMenuEntry.Item("设置", _settings),
+        TrayMenuEntry.Item("检查更新", _checkUpdates),
         TrayMenuEntry.Item("清空全部历史", _clear),
         TrayMenuEntry.Separator(),
         TrayMenuEntry.Item("退出", _exit),
